@@ -3,6 +3,10 @@
 vc
 vc  ; Interface to external version control
     ;
+    q
+    ;
+    ; Export all routines in ^ROUTINE to version control subdirectory
+    ;
 export
     w "Exporting routines for version control...",!
     s dir="c:\minimDat\"_$znspace_"\"
