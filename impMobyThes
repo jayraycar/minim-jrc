@@ -1,4 +1,25 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+impMobyThes
+impMobyThes ;import the Moby Thesaurus.
+    ; James Carthew 5 Sep 2010
+    ;
+    s fnm="c:\Users\james.LRSUPPORT\Documents\nlp\mthes\mobythes.aur"
+    ;s %dev="|FILE|"_fnm
+    s %dev=fnm
+    s $zt="eof"
+    o %dev:("R"):1
+    i '$t w "Could not open ",fnm,!
+    s lnCnt=0
+    f  u %dev r line  d
+    . s lnCnt=lnCnt+1
+    . i lnCnt#1000=0 u $p w lnCnt,!
+    . s root=$p(line,",")
+    . f w=1:1 s word=$p(line,",",w) q:word=""  d
+    . . s ^thesRoot(root,word)=""
+    . . s ^thesNdx(word,root)=""
+eof s $zt=""
+    c %dev
+    q
+ 
 

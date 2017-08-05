@@ -1,4 +1,158 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+convert
+convert ;Various conversion routines
+    ;
+    q
+    ;
+    ; convert a number to a base34 string
+    ;
+base34(num) n out,char,rem
+    i num="" q ""
+    i num'?1.N q ""
+    s out=""
+    s char="0123456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+    f  d  q:num=0
+    . s rem=num#34
+    . s out=$e(char,rem+1)_out
+    . s num=num\34
+    q out
+    ;
+    ; convert date format yyyymmdd to $H format
+    ;
+dateIn1(str) i $l(str)'=8 q ""
+    s str=$e(str,5,6)_"/"_$e(str,7,8)_"/"_$e(str,1,4)
+    q $$FUNC^%DATE(str)
+    ;
+    ; convert $H format to dd mmm yyyy format
+    ;
+dateOut1(h) n str,month,out
+    s str=$$CDS^%H(h)
+    s month=$p("Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec","|",$p(str,"/"))
+    s out=$p(str,"/",2)_" "_month_" "_$p(str,"/",3)
+    q out
+    ;
+    ; return the year of an $h date
+    ;
+year(h) n str
+    s str=$$CDS^%H(h)
+    q $p(str,"/",3)
+    ;
+    ; convert dj,hhmm to $h date,time
+    ;
+dtIn1(str) n date,time
+    s date=$p(str,",")+49307
+    s time=$$FUNC^%TI($p(str,",",2))
+    q date_","_time
+  ;
+  ; convert escape sequences back to characters
+  ;  returns string
+  ;
+struesc(str) n fnd,pos
+  i str="" q
+  s fnd=1
+  f  d  q:'fnd
+  . s fnd=0
+  . s pos=$f(str,"&amp;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-6)_"&"_$e(str,pos,$l(str))
+  . s pos=$f(str,"&apos;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-7)_"'"_$e(str,pos,$l(str))
+  . s pos=$f(str,"&quot;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-7)_""""_$e(str,pos,$l(str))
+  . s pos=$f(str,"&lt;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-5)_"<"_$e(str,pos,$l(str))
+  . s pos=$f(str,"&gt;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-5)_">"_$e(str,pos,$l(str))
+  q str
+  ;
+  ; escape disallowed characters
+  ;   returns a string
+  ;
+stresc(str) n fnd,pos
+  i str="" q ""
+  s fnd=1
+  f  d  q:'fnd
+  . s fnd=0
+  . s pos=$f(str,"&")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-2)_"&amp;"_$e(str,pos,$l(str))
+  . s pos=$f(str,"'")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-2)_"&apos;"_$e(str,pos,$l(str))
+  . s pos=$f(str,"""")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-2)_"&quot;"_$e(str,pos,$l(str))
+  . s pos=$f(str,"<")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-2)_"&lt;"_$e(str,pos,$l(str))
+  . s pos=$f(str,">")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-2)_"&gt;"_$e(str,pos,$l(str))
+  q str
+  ;
+  ; decimal to binary conversion
+  ;   takes a decimal number and returns a string of 1's and 0's
+dec2bin(x) n b,bitstr
+  i x<0 q ""  ;don't accept numbers less than 0
+  s bitstr=""
+  f  d  q:x=0
+  . s b=x#2,x=x\2,bitstr=b_bitstr
+  q bitstr
+  ;
+  ; binary to decimal
+  ;   takes a string of 1's and 0's and returns a decimal number
+bin2dec(x) n i,x1,len
+  s x1=0,len=$l(x)
+  f i=1:1:len i $e(x,i)="1" s x1=x1+(2**(len-i))
+  q x1
+  ;
+  ; base64 encoding of a single string
+  ;   input strings of up to 57 characters only
+  ;   this results in a maximum 76 character encoded output
+  ;
+b64enc(data) n i,pad,padding,triplet,j,temp,outstr
+  i $l(data)>57 q ""
+  ; code table
+  s ct="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+  s outstr=""
+  f i=1:3:$l(data) d
+  . ; convert character triplet to binary string
+  . s triplet=""
+  . f j=0:1:2 d
+  .. s temp=$$dec2bin($a($e(data,i+j)))
+  .. i temp'="" s temp=$e("00000000",1,8-$l(temp))_temp
+  .. s triplet=triplet_temp
+  . i $l(triplet)'=24 d
+  .. s pad=$l(triplet)#6
+  .. s triplet=triplet_$e("000000",1,6-pad)
+  . s padding=$e("==",1,4-($l(triplet)\6))
+  . ; convert binary string to coded characters
+  . f j=1:6:$l(triplet) d
+  .. s lookup=$$bin2dec($e(triplet,j,j+5))+1
+  .. s outstr=outstr_$e(ct,lookup)
+  s outstr=outstr_padding
+  q outstr
+  ;
+  ; base64 decoding
+  ;  strings must not be >76 characters in length
+  ;
+b64dec(data) n ct,outstr,ch,code,bin,i,j,triplet
+  i $l(data)>76 q ""
+  i data="" q ""
+  ; code table
+  s ct="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+  ;
+  s outstr="",code=0
+  f i=1:4:$l(data) q:i=""  d  q:code<0
+  . s triplet=""
+  . f j=0:1:3 d
+  .. s ch=$e(data,i+j)
+  .. ;w ch
+  .. s code=$f(ct,ch)-2
+  .. i code<0 q  ; non-encoding character found, don't go any further
+  .. s bin=$$dec2bin(code)
+  .. i bin'="" s bin=$e("00000000",1,6-$l(bin))_bin
+  .. s triplet=triplet_bin
+  . ; convert triplet to 8 bit characters
+  . ;w !,triplet,!
+  . f j=1:8:$l(triplet) d
+  .. ;w "in loop: ",$e(triplet,j,j+7),!
+  .. s outstr=outstr_$c($$bin2dec($e(triplet,j,j+7)))
+  q outstr
+ 
 

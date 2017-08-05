@@ -1,4 +1,107 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+xmlparse
+xmlparse  ;Parsing routines - non-validating
+  ; James Carthew 26Sep2001
+  ;
+  ; extract from string and place in spool
+  ;  note: call using . notation for spool and str
+  ;  returns 1 for success
+  ;          2 for end of tag without beginning of tag
+  ;          3 for beginning of tag without end of tag
+str2spl(spool,str) n snode,err,cdata,bot,eot
+  s snode=1,err=1
+  f  d  q:str=""
+  . s bot=$f(str,"<")
+  . s cdata=$e(str,1,bot-2)
+  . i cdata'="" s spool(snode)=cdata,snode=snode+1
+  . s str=$e(str,bot-1,$l(str)),bot=1
+  . s eot=$f(str,">")
+  . i bot=0,eot=0 q  ;cdata only
+  . i bot=0,eot>0 s err=2,str="" q  ;end of tag without beginning of tag
+  . i bot>0,eot=0 s err=3,str="" q  ;beginning of tag without end of tag
+  . s spool(snode)=$e(str,bot-1,eot-1),snode=snode+1
+  . s str=$e(str,eot,$l(str))
+  q err
+  ;
+  ; convert spool to xmlnode
+  ;   note: call using . notation for spool
+  ;   returns 1 if start tags and end tags match
+  ;   returns 0 if start end tag does not match a start tag
+  ;
+  ;   tagstk(stkpos,0)="tag name"
+  ;   tagstk(stkpos,1)="tag type"
+  ;   tagstk(stkpos,2)="xml subnode"
+spool2nd(spool,node) n snode,tagstk,stkpos,xnode,x,a
+  n cur,prev,cdata,datpos,err
+  i '$d(xmls)!('$d(xmlnt)) d init^xmlnode
+  s (cur,prev,xnode)=""
+  s (err,stkpos,datpos)=0
+  s tagstk(stkpos,2)=$o(@node@(""))  ;work-a-round to cater for jabber xml streams
+  i tagstk(stkpos,2)'="" d
+  . s tagstk(stkpos,1)="stag"
+  . s tagstk(stkpos,0)=$$getname^xmlnode(node,tagstk(stkpos,2))
+  e  s tagstk(stkpos,1)=""
+  s snode=""
+  f  s snode=$o(spool(snode)) q:snode=""  d  q:snode=""
+  . s prev=tagstk(stkpos,1)
+  . s cur=$$ndtype^xmlnode(spool(snode))
+  . i cur="dtag"!(cur="qtag") q  ;ignore these tag types
+  . i cur="cdata" s cdata(datpos)=spool(snode),datpos=datpos+1
+  . i cur="stag" d
+  .. s stkpos=stkpos+1
+  .. s tagstk(stkpos,0)=$p($p($p(spool(snode),"<",2),">")," ")
+  .. s tagstk(stkpos,1)=cur
+  .. ;if prev tag is "" then create first xmlnode
+  .. ;  and discard cdata
+  .. i prev="" s tagstk(stkpos,2)=$$instag^xmlnode(node,"",tagstk(stkpos,0))
+  .. ;if prev tag is "stag" then add as child to prev tag
+  .. ;  and discard cdata
+  .. i prev="stag" s tagstk(stkpos,2)=$$instag^xmlnode(node,tagstk(stkpos-1,2),tagstk(stkpos,0))
+  .. ;if prev tag is "etag" or "setag" then add as sibling to
+  .. ;  prev tag and discard cdata
+  .. i prev="etag"!(prev="setag") d
+  ... s xnode=$$getparen^xmlnode(node,tagstk(stkpos-1,2))
+  ... s tagstk(stkpos,2)=$$instag^xmlnode(node,xnode,tagstk(stkpos,0))
+  .. ;add attributes if any
+  .. d addattr(node,tagstk(stkpos,2),spool(snode))
+  .. k cdata s datapos=0
+  . i cur="etag" d
+  .. i $p($p(spool(snode),"</",2),">")'=$g(tagstk(stkpos,0)) s err=1,snode="" q
+  .. ;put cdata into matching start tag node
+  .. s a=""
+  .. f  s a=$o(cdata(a)) q:a=""  d
+  ... s cdata(a)=$$struesc^xmlnode(cdata(a))
+  ... s x=$$inscdata^xmlnode(node,tagstk(stkpos,2),cdata(a))
+  .. k cdata s datpos=0,stkpos=stkpos-1
+  . i cur="setag" d
+  .. s x=$p($p($p(spool(snode),"<",2),"/>")," ")
+  .. ;if prev="stag" add as child
+  .. ;  and discard cdata
+  .. i prev="stag" s xnode=$$instag^xmlnode(node,tagstk(stkpos,2),x)
+  .. ;if prev="etag" or prev="setag" add as sibling
+  .. ;  and discard cdata
+  .. i prev="etag"!(prev="setag") d
+  ... s xnode=$$getparen^xmlnode(node,tagstk(stkpos,2))
+  ... s xnode=$$instag^xmlnode(node,xnode,x)
+  .. d addattr(node,xnode,spool(snode))
+  .. k cdata s datapos=0
+  q 'err
+  ;
+  ; find attribute entries and add them to xnode
+addattr(node,xnode,str) n i,qu,attr,quit,j
+  s str=$p($p($p(str,"<",2),">")," ",2,$l(str," "))
+  i $e(str,$l(str))="/" s str=$e(str,1,$l(str)-1)
+  i str="" q
+  s (quit,qu)=0,attr="",j=1
+  f i=1:1:$l(str) d
+  . i ('qu&($e(str,i)=" "))!(i=$l(str)) d  q
+  .. s attr=$e(str,j,i-1)
+  .. s attr=$tr(attr,"""'","")
+  .. s attr=$$struesc^xmlnode(attr)
+  .. d putattr^xmlnode(node,xnode,$p(attr,"="),$p(attr,"=",2))
+  .. s j=i+1
+  . i """'"[$e(str,i) s qu='qu
+  w !
+  q
 

@@ -1,4 +1,11 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+temp
+temp ;miscellaneous dribble
+    ;
+    s w="",new=0
+    f  s w=$o(^word(w)) q:w=""  d
+    . i '$d(^xref(w)) s new=new+1
+    w new," words not in ^xref",!
+    q
 

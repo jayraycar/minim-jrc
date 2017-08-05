@@ -1,4 +1,170 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+libhtml
+libhtml  ;library of common routines for use in html forms
+  ;James Carthew 21Sep2001
+  ;
+  q
+Init s d1="|",d2="\",d3="~",cm=","
+  s lower="abcdefghijklmnopqrstuvwxyz",upper="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  q
+  ;
+  ; Table form
+  ;
+Form d Title(fld("form"))
+  w "<h2>",fld("form"),"</h2>",!
+  w "<form method=POST action=update>",!
+  w "<table border>",!
+  s i=""
+  f  s i=$o(^html(fld("form"),i)) q:i=""  d
+  . w "<tr><td>",$p(^(i),d1,1),"</td><td>",!
+  . i $p(^(i),d1,2)="input" d Input
+  . e  i $p(^(i),d1,2)="select" d Select
+  . e  i $p(^(i),d1,2)="textarea" d Textarea
+  . w "</td>",!
+  . w "</td>",!,"<td>"
+  . i $p(^html(fld("form"),i),d1,7)="0" d
+  .. w "<input type=checkbox name=list",i," value=Y>Search"
+  . w "</td></tr>",!
+  w "</table>",!
+  w "<input type=submit value=Submit>",!
+  w "<input type=reset value=Reset>",!
+  w "<input type=hidden name=form value=",fld("form"),">",!
+  w "</form>",!
+  d EndPage
+  q
+  ;
+  ;  html form input element
+  ;
+Input w "<input type=",$p(^(i),d1,3)," name=",i
+  i $p(^(i),d1,3)="text"!($p(^(i),d1,3)="password") d
+  . i $p(^(i),d1,4)'="" w " size=",$p(^(i),d1,4)
+  . i $p(^(i),d1,5)'="" w " maxlength=",$p(^(i),d1,5)
+  i $p(^(i),d1,3)="checkbox" w " value=Y"
+  w ">"
+  q
+  ;
+  ; html form select element
+  ;
+Select w "<select name=",i,">",!
+  s opts=$p(^(i),d1,6)
+  f j=1:1 s opt=$p(opts,d2,j) q:opt=""  w "<option>",opt,"</option>",!
+  w "</select>",!
+  q
+  ;
+  ; html form textarea element
+  ;
+Textarea q  ;this still needs to be implemented
+  ;
+  ; convert html "%" encoding to a character
+  ;
+Hex(str) n pos
+  s pos=1
+  f  d  q:'pos
+  . s pos=$f(str,"%")
+  . i pos=0 q
+  . s dec=$f(hexnum,$e(str,pos))-2*16+$f(hexnum,$e(str,pos+1))-2
+  . s str=$e(str,1,pos-2)_$c(dec)_$e(str,pos+2,$l(str))
+  q
+  ;
+  ; start of html page
+  ;
+Title(title) w "<html><head><title>",title,"</title></head>",!,"<body>" q
+  ;
+  ; end of html page
+  ;
+EndPage  w "</body></html>",! q
+  ;
+  ;Report an error and get correction
+  ;
+FldErr(title,field,msg) d Title(title)
+  w "<h2>",fld("form"),"<font color=red> - Error</font></h2>",!
+  w "<form method=POST action=update>",!
+  w "<table border>",!
+  s i=""
+  f  s i=$o(^html(fld("form"),i)) q:i=""  d
+  . w "<tr><td>",$p(^(i),d1),"</td>",!,"<td>"
+  . i $p(^(i),d1,2)="input" d Inputv
+  . e  i $p(^(i),d1,2)="select" d Selectv
+  . e  i $p(^(i),d1,2)="textarea" d Textareav
+  . w "</td>",!,"<td>"
+  . i i=field w "<font color=red>",msg,"</font>"
+  . i $p(^html(fld("submenu"),fld("form"),i),d1,7)="0" d
+  .. w "<input type=checkbox name=list",i," value=Y>Search"
+  . w "</td></tr>",!
+  w "</table>",!
+  w "<input type=submit value=Submit>",!
+  w "<input type=reset value=Reset>",!
+  w "<input type=hidden name=form value=",fld("form"),">",!
+  w "</form>",!
+  d EndPage
+  q
+  ;
+  ;
+Err(Title,Msg) d Title(Title)
+  w "<h2><font color=red>",Title," - ERROR</font></h2>",!
+  w Msg,!
+  d EndPage
+  q
+  ;
+  ; Redisplay a form with selected data from a list in appropriate field
+  ;
+Redisp d Title(fld("form"))
+  w "<h2>",fld("form"),"</h2>",!
+  w "<form method=POST action=update>",!
+  w "<table border>",!
+  s i=""
+  f  s i=$o(^html(fld("form"),i)) q:i=""  d
+  . w "<tr><td>",$p(^(i),d1),"</td>",!,"<td>"
+  . i $p(^(i),d1,2)="input" d Inputv
+  . e  i $p(^(i),d1,2)="select" d Selectv
+  . e  i $p(^(i),d1,2)="textarea" d Textv
+  . w "</td>",!,"<td>"
+  . i $p(^html(fld("form"),i),d1,7)="0" d
+  .. w "<input type=checkbox name=list",i," value=Y>Search"
+  . w "</td></tr>",!
+  w "</table>",!
+  w "<input type=submit value=Submit>",!
+  w "<input type=reset value=Reset>",!
+  w "<input type=hidden name=form value=",fld("form"),">",!
+  w "</form>",!
+  d EndPage
+  q
+  ;
+  ; html form input element with values
+  ;
+Inputv w "<input type=",$p(^(i),d1,3)," name=",i
+  i $p(^(i),d1,3)="text"!($p(^(i),d1,3)="password") d
+  . i $p(^(i),d1,4)'="" w " size=",$p(^(i),d1,4)
+  . i $p(^(i),d1,5)'="" w " maxlength=",$p(^(i),d1,5)
+  . w " value=",fld(i)
+  i $p(^(i),d1,3)="checkbox" w " value=Y"
+  w ">"
+  q
+  ;
+  ; html form select element with selected
+  ;
+Selectv  w "<select name=",i,">",!
+  s opts=$p(^(i),d1,6)
+  f j=1:1 s opt=$p(opts,d2,j) q:opt=""  d
+  . w "<option"
+  . i opt=fld(i) w " selected"
+  . w ">",opt,"</option>",!
+  w "</select>",!
+  q
+  ;
+  ; html form textarea element with value
+  ;
+Textv  ;not yet implemented
+  q
+  ;
+  ; Remove illegal characters
+  ;
+RemIll(illchar) s illchar="\"_illchar
+  s field=""
+  f  s field=$o(fld(field)) q:field=""  d
+  . i field'?1.N q
+  . s fld(field)=$tr(fld(field),illchar,"")
+  q
+ 
 

@@ -1,4 +1,13 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+webindex
+webindex ; default page to server if GET / request is received
+    d addc^html("<html>")
+    d addc^html("<head><title>Experimental webservice</title></head>")
+    d addc^html("<body>")
+    d addc^html("<h1>Experimental webservice</h1>")
+    d addc^html("This page is displayed on receiving a GET / request.")
+    d addc^html("</body></html>")
+    q
+    
 

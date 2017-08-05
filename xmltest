@@ -1,4 +1,34 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+xmltest
+xmltest  ;test of libxode port
+  ;James Carthew 25Sep2001
+  ;
+  d init^xmlnode
+  s x=$$instag^xmlnode("obj","","stream:stream")
+  s str="  <plant><leaf>text to discard<edge>Crenated</edge></leaf><stem colour=""glossy green""/></plant>"
+  s x=$$str2spl^xmlparse(.spool,str)
+  s x=$$spool2nd^xmlparse(.spool,"obj")
+  q
+  ;
+test1 d init^xmlnode
+  s node="obj"
+  s plant=$$instag^xmlnode(node,"","plant")
+  s leaf=$$instag^xmlnode(node,plant,"leaf")
+  s stem=$$instag^xmlnode(node,plant,"stem")
+  s stem=$$appsib^xmlnode(node,leaf,"flower",xmlnt("tag"))
+  s edge=$$instag^xmlnode(node,leaf,"edge")
+  s y=$$inscdata^xmlnode(node,edge,"Crenated")
+  s y=$$inscdata^xmlnode(node,edge,"- mildly")
+  w "test getdata = ",$$getdata^xmlnode(node,y)
+  w "test gettag  = ",$$gettag^xmlnode(node,leaf,"edge")
+  d putattr^xmlnode(node,stem,"colour","green")
+  d putattr^xmlnode(node,stem,"surface","smooth")
+  w "has child=",$$haschild^xmlnode(node,leaf),!
+  w "has child=",$$haschild^xmlnode(node,stem),!
+  w "tag2str = ",$$tag2str^xmlnode(node,leaf,1),!
+  w "tag2str = ",$$tag2str^xmlnode(node,stem,0),!
+  d nd2spool^xmlnode(node,top,.spool)
+  w $$nd2str^xmlnode(node,top)
+  q
 

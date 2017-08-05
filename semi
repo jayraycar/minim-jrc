@@ -1,4 +1,87 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+semi
+semi ;semistructured data manipulation routines
+  ;
+  ; James Carthew 27 Oct 2003
+  ;
+  ; select child_object_name from parent_object where
+  ; child_object has value
+find(co1,po,co2,val) n poOid,coOid,found
+  k result
+  ;find parent objects with the name po
+  s poOid=""
+  f  s poOid=$o(^NamIdx(po,poOid)) q:poOid=""  d
+  . ;find parent objects with child = co2
+  . s coOid="",found=0
+  . f  s coOid=$o(^Obj(poOid,coOid)) q:coOid=""  d
+  .. i $p(^Obj(coOid),"|")=co2 s found=1
+  . i found d
+  .. ;find co1 object
+  .. s coOid=""
+  .. f  s coOid=$o(^Obj(poOid,coOid)) q:coOid=""  d
+  ... i $p(^Obj(coOid),"|")=co1 s result(coOid)=""
+  ;
+  q
+  ;
+  ; print an object to screen
+  ;
+prObj(oid,level) n cOid,sp
+  i '$d(level) s level=0
+  i level>2 q  ;limit to print just 2 levels
+  s $p(sp," ",level*2+1)=""
+  w sp,$p(^Obj(oid),"|")," &",oid," "
+  ; object has a value, print it
+  i $p(^Obj(oid),"|",4)'="" d  q
+  . i $p(^Obj(oid),"|",3)="string" w """"
+  . w $p(^Obj(oid),"|",4)
+  . i $p(^Obj(oid),"|",3)="string" w """"
+  . w !
+  ; object consists of one or more children, print them
+  w !
+  s cOid=""
+  f  s cOid=$o(^Obj(oid,cOid)) q:cOid=""  d
+  . d prObj(cOid,level+1)
+  q
+  ;
+  ; get values of a specified object
+  ;
+getVal(oid) n i,list
+  ; oid does not exist
+  i '$d(^Obj(oid)) q ""
+  ; oid has a value
+  i $p(^Obj(oid),"|",4)'="" q $p(^Obj(oid),"|",4)
+  ; oid has a list of objects
+  s (i,list)=$o(^Obj(oid,""))
+  f  s i=$o(^Obj(oid,i)) q:i=""  d
+  . s list=list_","_i
+  q list
+  ;
+  ; get oid of a specified object
+  ;  result must be submitted as .array_name
+  ;  objstr is a "." separated path
+  ;  pOid is the parent Oid to search, may be left off
+  ;
+getOid(result,objstr,pOid) n name,oid,next
+  s name=$p(objstr,".")
+  w name,!
+  i name="" q ""
+  i '$d(pOid) s pOid=""
+  i pOid="" d  ;top level object
+  . s oid=""
+  . f  s oid=$o(^NamIdx(name,oid)) q:oid=""  d
+  .. i $p(^Obj(oid),"|",2)="" s result(oid)=""
+  e  d         ; sub level object
+  . s oid=""
+  . f  s oid=$o(^Obj(pOid,oid)) q:oid=""  d
+  .. i $p(^Obj(oid),"|")=name s result(oid)=""
+  ;
+  ; traverse object name one place
+  ;
+  s oid="",next=""
+  f  s oid=$o(result(oid)) q:oid=""  d
+  . s name=$p(objstr,".",2,$l(objstr,"."))
+  . i name'="" d getOid(.next,name,oid)
+  i $d(next)\10=1 k result m result=next
+  q
 

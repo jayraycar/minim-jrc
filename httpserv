@@ -1,4 +1,266 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+httpserv
+httpserv ;  http web services
+    ;
+    ; GT.M version
+    ; called from xinetd at Linux OS level
+    ; see /etc/xinetd.d/mwebserver for the defined port
+    ;
+    ; adapted to MiniM and Node.js (in the place of xinetd)
+    ; 20/6/2017
+    ;
+    ; Supported:
+    ;   GET http://server/resource/id, content after "?"
+    ;   POST http://server/resource, content
+    ;   PUT http://server/resource/id, content
+    ;   DELETE http://server/resource/id, no content
+    ;
+    ; Not supported:
+    ;   POST http://server/resource/id
+    ;   Note: POST is intended to be used in circumstances where the resource
+    ;   is not known by the client.  eg, the server is to assign one.
+    ;
+    ;Notes on use:
+    ;   if GET is to be used without an id eg, /json/errorLog/dateList
+    ;   then set the id to "null", get, /json/errorLog/dateList/null
+    ;   as a place holder
+    ;
+    ; Read HTTP request
+    ; put HTTP headers into %headers array
+    ; put HTTP action in %action
+    ; put HTTP request data into %data array
+    ;
+    s $ZT="save^logErr"
+    s %crlf=$c(13,10)
+    s %s1=$e(^Sys("separators"),1)
+    s %s2=$e(^Sys("separators"),2)
+    s %s3=$e(^Sys("separators"),3)
+    s %buf=""
+    s %request=""
+    d getReqL
+    i %request="" d
+    . s %buf="HTTP/1.1 400 BAD REQUEST"_%crlf
+    e  d
+    . d extrData
+    . d procReq
+    d respond
+    q
+    ;
+    ; get request data, one line at a time
+    ;   used by GT.M in xinetd mode
+    ;
+getReqL n quit,line,attr,first,seq
+    k %headers
+    u $p
+    s quit=0,line="",first=1
+    f  d  q:quit
+    . r line:5
+    . i line="" s quit=1 q
+    . i first s %request=line,first=0
+    . e  d
+    . . s attr=$zlower($p(line,": "))
+    . . s %headers(attr)=$$strip^libW($p(line,": ",2))
+    l +^httpLog
+    s seq=$o(^httpLog(""),-1)+1
+    s ^httpLog(seq)=%request_%s1_$h
+    l -^httpLog
+    q
+    ;
+    ; extract data from request
+    ;
+extrData n object,i,value,cookie,next
+    k %data
+    s %method=$p(%request," "),%content=""
+    i %method="GET" d
+    . d GET
+    e  i %method="POST" d
+    . d POST
+    e  i %method="PUT" d
+    . d PUT
+    e  i %method="DELETE" d
+    . d DELETE
+    e  d  q
+    . d UNK
+    ;
+    ; extract the data from %content
+    i %request["?" d
+    . f i=1:1:$l(%content,"&") d
+    . . s object=$p($p(%content,"&",i),"=")
+    . . i object="" q
+    . . s value=$p($p(%content,"&",i),"=",2)
+    . . s value=$$decHex^html(value)
+    . . i '$d(%data(object)) s %data(object)=value
+    . . e  d
+    . . . s next=$o(%data(object,""),-1)+1
+    . . . s %data(object,next)=value
+    e  d
+    . k %json
+    . s jarray(1)=%content
+    . s ok=$$decode^json(.jarray,"%json")
+    ;
+    ; store cookies
+    i $d(%headers("cookie")) d
+    . f i=1:1:$l(%headers("cookie"),";") d
+    . . s cookie=$p(%headers("cookie"),";",i)
+    . . s %cookie($p(cookie,"="))=$p(cookie,"=",2)
+    q
+    ;
+    ; extract data from GET request
+    ;
+GET s %action=$p($p(%request," ",2),"?")
+    s actionLen=$l(%action,"/")
+    s %actionId=$p(%action,"/",actionLen)
+    s %actionId=$$decHex^html(%actionId)
+    s %action=$p(%action,"/",1,actionLen-1)
+    s %content=$p($p(%request,"?",2)," ",1)
+    i %action="" s %action="/"
+    q
+    ;
+    ; get data for POST request
+    ;
+POST n ok,jarray
+    ; extract the resource string
+    ; there is to be no resource id for the POST method
+    s %action=$p(%request," ",2)
+    ; get the content
+    i '$d(%headers("content-length")) d  q
+    . s %buf="HTTP/1.1 411 LENGTH REQUIRED"
+    u $p:(NODELIMITER:NOWRAP:NOECHO)
+    r %content#%headers("content-length")
+    s %content=$tr(%content,$c(10),"")
+    q
+    ;
+    ; get data for PUT request
+    ;
+PUT ; extract resource string and resource id from URL
+    s %action=$p(%request," ",2)
+    s actionLen=$l(%action,"/")
+    s %actionId=$p(%action,"/",actionLen)
+    s %actionId=$$decHex^html(%actionId)
+    s %action=$p(%action,"/",1,actionLen-1)
+    i %action="" s %action="/"
+    ; get the content
+    i '$d(%headers("content-length")) d  q
+    . s %buf="HTTP/1.1 411 LENGTH REQUIRED"
+    u $p:(NODELIMITER:NOWRAP:NOECHO)
+    r %content#%headers("content-length")
+    s %content=$tr(%content,$c(10),"")
+    q
+    ;
+    ; Get data for DELETE
+    ;
+DELETE d GET
+    s %content=""
+    q
+    ;
+    ; unknown method received
+    ;
+UNK s %buf="HTTP/1.1 405 METHOD NOT ALLOWED"_%crlf
+    s %action=""
+    s %content=""
+    q
+    ;
+    ; process the request
+    ;
+procReq k ^httpout($j)  ;make sure nothing is lying around
+    i '$$session() q
+    s %pgm=$g(^httpd(%method,%action))
+    i %pgm="" d  q
+    . s %buf="HTTP/1.1 501 NOT IMPLEMENTED"_%crlf
+    d @%pgm
+    q
+    ;
+    ; send response
+    ;
+respond n contLen,i
+    u $p
+    i %buf'="" w %buf q
+    ; determine response
+    s %buf="HTTP/1.1 200 OK"_%crlf
+    i '$d(^httpout($j)) s %buf="HTTP/1.1 204 NO CONTENT"_%crlf
+    i $d(^httpout($j,"COOKIE")) d addh^html("Set-Cookie",^httpout($j,"COOKIE"))
+    i $d(^httpout($j,"AUTH")) d
+    . s %buf="HTTP/1.1 401 UNAUTHORIZED"_%crlf
+    . s %buf=%buf_"WWW-Authenticate: Basic realm=""tigerQuoll/development"""_%crlf
+    ;. s %buf=%buf_"Content-Length: 0"_%crlf
+    ; determine content length
+    s i=""
+    s contLen=0
+    f  s i=$o(^httpout($j,"C",i)) q:i=""  d
+    . s contLen=contLen+$l(^httpout($j,"C",i))+$l(%crlf)
+    d addh^html("Content-Length",contLen)
+    w %buf
+    ; send headers
+    s i=""
+    f  s i=$o(^httpout($j,"H",i)) q:i=""  d
+    . s $x=0,$y=0
+    . w $p(^httpout($j,"H",i),%s1),": ",$p(^httpout($j,"H",i),%s1,2),%crlf
+    w %crlf
+    ; send content
+    s $x=0,$y=0,i=""
+    f  s i=$o(^httpout($j,"C",i)) q:i=""  d
+    . w ^httpout($j,"C",i),%crlf
+    . s $x=0,$y=0
+    k ^httpout($j)
+    q
+    ;
+    ; session handling
+    ;   check if cookie already set
+    ;   else create session id, prepare global
+    ;   if set create variable %sid that holds indirection global
+    ;
+session() n sid,ok
+    s %sid="",ok=0
+    ; no cookie set
+    i '$d(%cookie("sid")) d
+    . ; no authorisation present
+    . i '$d(%headers("authorization")) d
+    . . s ^httpout($j,"AUTH")=""
+    . e  d
+    . . ; authorisation present, check it
+    . . i '$$checkLogin() d
+    . . . s ^httpout($j,"AUTH")=""
+    . . e  d
+    . . . ; authorisation passed, set up session
+    . . . s sid=$h_","_$j
+    . . . s ^httpout($j,"COOKIE")="sid="_sid
+    . . . s %cookie("sid")=sid
+    . . . s %sid="^session("_sid_")"
+    . . . k @%sid  ;ensure nothing already exists
+    . . . s @%sid@("%user")=%data("user")
+    . . . s ok=1
+    ; cookie available, session exists
+    e  d
+    . i %cookie("sid")="" d  q
+    . . s ^httpout($j,"AUTH")=""
+    . . s ok=0
+    . s %sid="^session("_%cookie("sid")_")"
+    . s ok=1
+    . i '$d(@%sid@("%user")) d
+    . . ; user name missing from session, reauthorise
+    . . s ^httpout($j,"AUTH")=""
+    . . s ok=0
+    q ok
+    ;
+    ; Check the login details
+    ;
+checkLogin() n coded,type,decoded,user,pwd
+    ; decode login details
+    s coded=$g(%headers("authorization"))
+    s type=$p(coded," ",1)
+    s coded=$p(coded," ",2)
+    s decoded=$$b64dec^convert(coded)
+    s user=$p(decoded,":")
+    s pwd=$$strip^libW($p(decoded,":",2))
+    ; check user exists
+    i '$d(^Users(user)) d  q 0
+    ; check password matches
+    i $$hash^checkLogin(pwd)'=$p(^Users(user),%s1,2) q 0
+    ; passed
+    s %data("user")=user
+    q 1
+ 
+ 
+ 
 

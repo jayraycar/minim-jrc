@@ -1,4 +1,392 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+xmlnode
+xmlnode  ;part of libxode (ported from libxode 1.2)
+  ;James Carthew 24Sep2001
+  ;
+  ;  Data structure
+  ;    xml(node,snode,0)="name\type\data_sz\complete\parent\firstchild\lastchild\
+  ;                     prev\next\firstattr\lastattr"
+  ;    xml(node,snode,1)="data"
+  ;
+init s d1="|",d2="\",d3="~"
+  s xmlnt("tag")=0,xmlnt("attrib")=1,xmlnt("cdata")=2
+  s xmls("name")=1,xmls("type")=2,xmls("data_sz")=3,xmls("complete")=4,xmls("parent")=5
+  s xmls("firstchild")=6,xmls("lastchild")=7,xmls("prev")=8,xmls("next")=9
+  s xmls("firstattr")=10,xmls("lastattr")=11
+  q
+  ;
+  ;
+newnode() n node
+  u $p w "what do you think you are doing?",!
+  s node=$o(xml(""),-1)+1
+  q node
+  ;
+  ;
+newsnode(node,name,type) n snode
+  s snode=$o(@node@(""),-1)+1
+  s @node@(snode,0)=name_d1_type
+  q snode
+  ;
+  ; create a tag node
+  ;    returns subnode if successful
+  ;    returns 0 if unsuccessful
+newtag(node,name) q $$newsnode(node,name,xmlnt("tag"))
+  ;
+  ;
+appsib(node,lasts,name,type) n x,parent
+  s x=$$newsnode(node,name,type)
+  i x'="" d
+  . s $p(@node@(x,0),d1,xmls("prev"))=lasts
+  . s $p(@node@(lasts,0),d1,xmls("next"))=x
+  . s $p(@node@(x,0),d1,xmls("parent"))=$p(@node@(lasts,0),d1,xmls("parent"))
+  . s parent=$p(@node@(lasts,0),d1,xmls("parent"))
+  . s $p(@node@(parent,0),d1,xmls("lastchild"))=x
+  q x
+  ;
+  ;
+ndins(node,parent,name,type) n x
+  i node="" q 0
+  i name="",type'=xmlnt("cdata") q 0
+  i type=xmlnt("cdata") s name=""
+  i parent="" s x=$$newtag(node,name) q x
+  i $p(@node@(parent,0),d1,xmls("firstchild"))="" d
+  . s x=$$newsnode(node,name,type)
+  . s $p(@node@(parent,0),d1,xmls("firstchild"))=x
+  e  s x=$$appsib(node,$p(@node@(parent,0),d1,xmls("lastchild")),name,type)
+  s $p(@node@(x,0),d1,xmls("parent"))=parent
+  s $p(@node@(parent,0),d1,xmls("lastchild"))=x
+  q x
+  ;
+  ; append a child to a tag
+  ;  returns subnode if successful
+  ;  returns 0 if unsuccesful
+instag(node,parent,name) q $$ndins(node,parent,name,xmlnt("tag"))
+  ;
+  ;  append character data to a tag
+  ;    if last child of parent is CDATA, merges subnodes
+  ;    otherwise creates CDATA subnode and appends it to parents child list
+  ;    returns CDATA node if successful
+  ;    returns 0 if unsuccessful
+inscdata(node,parent,CDATA) n x,lastc
+  i CDATA=""!(parent="") q 0
+  s lastc=$p(@node@(parent,0),d1,xmls("lastchild"))
+  i lastc'="",$p(@node@(lastc,0),d1,xmls("type"))=xmlnt("cdata") d
+  . s x=lastc
+  . s @node@(x,1)=@node@(x,1)_" "_CDATA
+  e  d
+  . s x=$$ndins(node,parent,"",xmlnt("cdata"))
+  . s @node@(x,1)=CDATA
+  s $p(@node@(x,0),d1,xmls("data_sz"))=$l(@node@(x,1))
+  q x
+  ;
+  ;
+instagnd(node,parent,subnode) n child
+  s child=instag(node,parent,$$getname(node,subnode))
+  i $$hasattr(node,subnode) d insnode(node,child,$$getfattr(node,subnode))
+  i $$haschild(node,subnode) d insnode(node,child,$$getfchld(node,subnode))
+  q child
+  ;
+  ;
+insnode(node,parent,subnode) n data,i
+  i parent=""!(subnode="") q
+  f  d  q:node=""
+  . s type=$$gettype(subnode)
+  . i type=xmlnt("attribute") d putattr(node,$$getname(node,subnode),@node@(subnode,1)) q
+  . i type=xmlnt("tag") d instagnd(node,parent,subnode) q
+  . i type=xmlnt("cdata") d
+  .. s data=$$getdata(node,subnode)
+  .. d inscdata(node,parent,data)
+  . s subnode=$$getnsib(node,subnode)
+  q
+  ;
+  ;
+file2nd(file) q
+  ;
+  ;
+ndfree(node,subnode) n x,next,prev,parent
+  ;remove children first
+  i $$haschild(node,subnode) d ndfree(node,$p(@node@(subnode,0),d1,xmls("firstchild")))
+  ;remove attributes
+  s x=$p(@node@(subnode,0),d1,xmls("firstattr"))
+  f  q:x=""  d
+  . s next=$p(@node@(x,0),d1,xmls("next"))
+  . k @node@(x)
+  . s x=next
+  ;fix up sibling list
+  s prev=$p(@node@(subnode,0),d1,xmls("prev"))
+  s next=$p(@node@(subnode,0),d1,xmls("next"))
+  s parent=$p(@node@(subnode,0),d1,xmls("parent"))
+  i prev="" s $p(@node@(parent,0),d1,xmls("firstchild"))=next
+  i next="" s $p(@node@(parent,0),d1,xmls("lastchild"))=prev
+  i next>0 s $p(@node@(prev,0),d1,xmls("next"))=next
+  i prev>0 s $p(@node@(next,0),d1,xmls("prev"))=prev
+  ;remove self
+  k @node@(subnode)
+  q
+  ;
+  ;
+xmlfree(node) k @node q
+  ;
+  ; search sibling list for subnode of name and type
+  ;   returns subnode or ""
+ndsrch(node,firsts,name,type) n current,quit
+  s current=firsts,quit=0
+  f  d  q:quit
+  . i $p(@node@(current,0),d1,xmls("type"))=type,$p(@node@(current,0),d1,xmls("name"))=name s quit=1 q
+  . s current=$p(@node@(current,0),d1,xmls("next"))
+  . i current="" s quit=1 q
+  q current
+  ;
+  ; find first tag with name from or below specified parent
+  ;   parameters
+  ;     parent -- pointer to the parent tag
+  ;     name -- "name" for the child tag of that name
+  ;             "name/name" for a sub child (recurses)
+  ;             "?attrib" to match the first tag with that attrib defined
+  ;             "?attrib=value" to match the first tag with that attrib and value
+  ;             or "name/?attrib=value"
+  ;             or "name/name/?attrib=value"
+  ;             or etc
+  ;             ?attrib must be last in the list if it exists
+  ;             name before a / my be null, ie "/name" is valid and means
+  ;               that all children of parent will be searched for the subnode "name"
+  ;               ie, find the first grandchild with name "name"
+  ;  returns subnode if successful
+  ;  returns "" if unsuccessful
+gettag(node,parent,name) n ret,step,name1,attrib,value,nattr
+  i node="" q ""
+  i parent=""!($p(@node@(parent,0),d1,xmls("firstchild"))="")!(name="") q ""
+  i name'["/",name'["?" q $$ndsrch(node,$p(@node@(parent,0),d1,xmls("firstchild")),name,xmlnt("tag"))
+  ;
+  s ret=""
+  ;
+  ; if ?attr=value was passed in name, check all children attached to parent for
+  ;   the attribute and value
+  i $e(name)="?" d  q ret
+  . s value=$p(attrib,"=",2),attrib=$p($p(attrib,"="),"?",2)
+  . i attrib="" q
+  . s step=$p(@node@(parent,0),d1,xmls("firstchild"))
+  . s quit=0
+  . f  q:step=""  d  q:quit
+  .. i $$gettype(node,step)'=xmlnt("tag") q
+  .. s nattr=$$getattr(node,step,attrib)
+  .. i nattr="" q
+  .. i value'="",@node@(nattr,1)'=value q
+  .. s ret=step,quit=1 q
+  .. s step=$$getnsib(node,step)
+  ;
+  ; recurse name list
+  s step=$p(@node@(parent,0),d1,xmls("firstchild"))
+  s quit=0
+  f  q:step=""  d  q:quit
+  . i $$gettype(node,step)'=xmlnt("tag") q
+  . i $p(name,"/")'="",$p(name,"/")'=$$getname(node,step) q
+  . s ret=$$gettag(node,step,$p(name,"/",2,$l(name,"/")))
+  . i ret'="" s quit=1
+  . s step=$$getnsib(node,step)
+  q ret
+  ;
+  ; get tag data from any tag
+  ;   returns cdata
+gettagd(node,parent,name) n tag
+  i parent="" s tag=$o(@node@(""))
+  e  s tag=$$gettag(node,parent,name)
+  i tag="" s data="" q
+  s tag=$$ndsrch(node,$p(@node@(tag,0),d1,xmls("firstchild")),"",xmlnt("cdata"))
+  q $$getdata(node,tag)
+  ;
+  ; put attribute
+  ;   returns nothing
+putattr(node,owner,name,value) n attrib
+  i node=""!(owner="")!(name="")!(value="") q
+  i $p(@node@(owner,0),d1,xmls("firstattr"))="" d
+  . s attrib=$$newsnode(node,name,xmlnt("attrib"))
+  . s $p(@node@(owner,0),d1,xmls("firstattr"))=attrib
+  . s $p(@node@(owner,0),d1,xmls("lastattr"))=attrib
+  e  d
+  . s attrib=$$ndsrch(node,$p(@node@(owner,0),d1,xmls("firstattr")),name,xmlnt("attrib"))
+  . i attrib="" d
+  .. s attrib=$$appsib(node,$p(@node@(owner,0),d1,xmls("lastattr")),name,xmlnt("attrib"))
+  .. s $p(@node@(owner,0),d1,xmls("lastattr"))=attrib
+  s $p(@node@(attrib,0),d1,xmls("data_sz"))=$l(value)
+  s @node@(attrib,1)=value
+  s $p(@node@(attrib,0),d1,xmls("parent"))=owner
+  q
+  ;
+  ;
+getattr(node,owner,name) n attrib,fa
+  s fa=$p(@node@(owner,0),d1,xmls("firstattr"))
+  i owner'="",fa'="" s attrib=$$ndsrch(node,fa,name,xmlnt("attrib"))
+  q attrib
+  ;
+  ; get first attribute
+getfattr(node,parent)
+  i parent'="" s parent=$p(@node@(parent,0),d1,xmls("firstattr"))
+  q parent
+  ;
+  ; get first child
+getfchld(node,parent) n fchild
+  i parent'="" s fchild=$p(@node@(parent,0),d1,xmls("firstchild"))
+  q fchild
+  ;
+  ; get last child
+getlchld(node,parent)
+  i parent'="" s parent=$p(@node@(parent,0),d1,xmls("lastchild"))
+  q parent
+  ;
+  ; get next sibling
+getnsib(node,sibling)
+  i sibling'="" s sibling=$p(@node@(sibling,0),d1,xmls("next"))
+  q sibling
+  ;
+  ; get previous sibling
+getpsib(node,sibling)
+  i sibling'="" s sibling=$p(@node@(sibling,0),d1,xmls("prev"))
+  q sibling
+  ;
+  ; get parent
+getparen(node,subnode)
+  i subnode'="" s subnode=$p(@node@(subnode,0),d1,xmls("parent"))
+  q subnode
+  ;
+  ; get tag name
+getname(node,subnode)
+  i subnode'="" q $p(@node@(subnode,0),d1,xmls("name"))
+  q ""
+  ;
+  ; get tag data
+  ;   returns cdata
+getdata(node,subnode) q @node@(subnode,1)
+  ;
+  ; get size of tag data
+getdsz(node,subnode)
+  i subnode'="" s subnode=$p(@node@(subnode,0),d1,xmls("data_sz"))
+  q subnode
+  ;
+  ; get subnode type
+gettype(node,subnode)
+  i subnode'="" s subnode=$p(@node@(subnode,0),d1,xmls("type"))
+  q subnode
+  ;
+  ; check for children on subnode
+  ;  returns 1 for true, 0 for false
+haschild(node,subnode)
+  i subnode'="" s subnode=$p(@node@(subnode,0),d1,xmls("firstchild"))
+  i subnode>0 q 1
+  q 0
+  ;
+  ; check for attributes on subnode
+  ;  returns 1 for true, 0 for false
+hasattr(node,subnode)
+  i subnode'="" s subnode=$p(@node@(subnode,0),d1,xmls("firstattr"))
+  i subnode>0 q 1
+  q 0
+  ;
+  ; convert escape sequences back to characters
+  ;  returns string
+struesc(str) n fnd,pos
+  i str="" q
+  s fnd=1
+  f  d  q:'fnd
+  . s fnd=0
+  . s pos=$f(str,"&amp;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-6)_"&"_$e(str,pos,$l(str))
+  . s pos=$f(str,"&apos;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-7)_"'"_$e(str,pos,$l(str))
+  . s pos=$f(str,"&quot;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-7)_""""_$e(str,pos,$l(str))
+  . s pos=$f(str,"&lt;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-5)_"<"_$e(str,pos,$l(str))
+  . s pos=$f(str,"&gt;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-5)_">"+$e(str,pos,$l(str))
+  q str
+  ;
+  ; escape disallowed characters
+  ;   returns a string
+stresc(str) n fnd,pos
+  i str="" q ""
+  s fnd=1
+  f  d  q:'fnd
+  . s fnd=0
+  . s pos=$f(str,"&")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-2)_"&amp;"_$e(str,pos,$l(str))
+  . s pos=$f(str,"'")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-2)_"&apos;"_$e(str,pos,$l(str))
+  . s pos=$f(str,"""")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-2)_"&quot;"_$e(str,pos,$l(str))
+  . s pos=$f(str,"<")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-2)_"&lt;"_$e(str,pos,$l(str))
+  . s pos=$f(str,">")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-2)_"&gt;"_$e(str,pos,$l(str))
+  q str
+  ;
+  ; convert a tag to a string
+  ;   returns string
+tag2str(node,subnode,flag) n tmp,str
+  i flag=0!(flag=1) d
+  . s str="<"_$$getname(node,subnode)
+  . s tmp=$$getfattr(node,subnode)
+  . f  q:tmp=""  d
+  .. s str=str_" "_$$getname(node,tmp)_"='"_$$stresc(@node@(tmp,1))_"'"
+  .. s tmp=$$getnsib(node,tmp)
+  . i flag=0 s str=str_"/>"
+  . e  s str=str_">"
+  e  s str="</"_$$getname(node,subnode)_">"
+  q str
+  ;
+  ; convert a node to a spool structure
+  ;   note: use . notation when specifying s
+nd2spool(node,subnode,s) n level,dir,tmp,spnode,i,quit,cont
+  i node=""!(subnode="")!($$gettype(node,subnode)'=xmlnt("tag")) s s="" q
+  s quit=0,level=0,dir=0,spnode=0
+  f  d  q:quit
+  . s cont=0
+  . i dir=0 d  ;beginning of tag
+  .. i $$gettype(node,subnode)=xmlnt("tag") d
+  ... i $$haschild(node,subnode) d
+  .... s s(spnode)=$$tag2str(node,subnode,1),spnode=spnode+1
+  .... s subnode=$$getfchld(node,subnode)
+  .... s level=level+1,cont=1
+  ... e  s s(spnode)=$$tag2str(node,subnode,0),spnode=spnode+1
+  .. e  s s(spnode)=$$stresc($$getdata(node,subnode)),spnode=spnode+1
+  . i cont q
+  . s tmp=$$getnsib(node,subnode)
+  . i tmp="" d  ;end of tag
+  .. s subnode=$$getparen(node,subnode)
+  .. s level=level-1
+  .. i level'<0 s s(spnode)=$$tag2str(node,subnode,2),spnode=spnode+1
+  .. i level<1 s quit=1 q
+  .. s dir=1
+  . e  d
+  .. s subnode=tmp
+  .. s dir=0
+  q
+  ;
+  ; convert xml(node) tree into a string
+  ;   returns string
+nd2str(node,subnode) n i,spool,str
+  d nd2spool(node,subnode,.spool)
+  s i="",str=""
+  f  s i=$o(spool(i)) q:i=""  d
+  . s str=str_spool(i)
+  q str
+  ;
+  ; determine subnode type
+ndtype(str)
+  i str="" q ""
+  i $e(str)'="<" q "cdata"
+  i $e(str,1,2)="<?" q "qtag"
+  i $e(str,1,2)="<!" q "dtag"
+  i $e(str,1,2)="</" q "etag"
+  i $e(str)="<",$e(str,$l(str)-1)'="/" q "stag"
+  i $e(str,$l(str)-1)="/" q "setag"
+  q "error"
+  ;
+  ;
+ndcmp(node,a,b) q
+  ;
+  ;
+nd2file(file,node,subnode) q
+ 
 

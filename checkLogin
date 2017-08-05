@@ -1,4 +1,52 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+checkLogin
+checkLogin ; Check the login details and set up the session
+    ; 6 Jul 2010
+    ; 22 Jul 2017 Modified to work on MiniM
+    ;
+    ; check user exists
+    i '$d(^Users(%data("user"))) d  q
+    . d addm^html("Invalid user code or password")
+    . d ^webRoot
+    ; check password matches
+    i '$$check(%data("user"),%data("pwd")) d  q
+    . d addm^html("Invalid user code or password")
+    . d ^webRoot
+    ; all checks have passed, set up session and continue
+    i '$$session^httpd() q
+    d ^webMenu
+    q
+    ;
+    ; do hash on password
+    ;
+hash(pwd) n zeof=$v("proc",5,0)
+    n dev="|PIPE|c:\minimDat\sha256sum"
+    n resp,temp
+    o dev:("rwt")
+    ; send password to hash program
+    u dev
+    w pwd,!
+    ; get the response from the program
+    r resp
+    ; soak up any more lines from the program
+    f  q:$zeof  d
+    . r temp
+    u $p
+    c dev
+    i $v("proc",5,zeof)
+    ; return the hash value of the password
+    q $p(resp," ")
+    ;
+    ; check a password
+    ;
+check(user,pwd)
+    i $$hash(pwd)'=$p(^Users(user),%s1,2) q 0
+    q 1
+    ;
+    ; set a password
+    ;
+setpwd(user,pwd) s $p(^Users(user),%s1,2)=$$hash(pwd) q
+ 
+ 
 

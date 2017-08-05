@@ -1,4 +1,355 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+httpd
+httpd ;HTTP and web service server
+    ;
+    ; Adapted for use on MiniM from code written for GT.M
+    ; 14 may 2011
+    ;
+    ; Read HTTP request
+    ; put HTTP request properties into %reqprops array
+    ; put HTTP action in %action
+    ; put HTTP request data into %data array
+    ; set %tmpl in the called program if something other than main.tmpl is required
+    ;   for the display template.
+    ; set %menu in the called program, if required.
+    ; set %style if a different style sheet is required.
+    ;
+    s %dev="|TCP|:12312"
+    o %dev
+    s %conn=$KEY  ;should contain ESTABLISHED|handle|remote_host
+    s %s1="|"
+    s %s2="\"
+    s %s3="#"
+    s %imgsrvr=""
+    s %tmpl="nomenu.tmpl",%menu="",%style="main.css"
+    s %lower="abcdefghijklmnopqrstuvwxyz"
+    s %upper="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    s %crlf=$c(13,10)
+    ;s $et="g ^logErr"
+    s %stopServer=0
+    f  d  q:%stopServer
+    . u $p w "Waiting...",! u %dev
+    . u %dev:/ACCEPT
+    . u $p
+    . w "Connection accepted",!
+    . w %conn,!
+    . u %dev
+    . d getReqL  ;get the request
+    . d extrData ;extract the data from the request
+    . d procReq  ;process the request
+    c %dev
+    q
+    ;
+    ; get request data, one character at a time
+    ;   used to get around issues on Cache
+    ;
+getReqC n quit,ch,line,first,attr
+    k %reqprops
+    s quit=0,first=1,line=""
+    F  D  Q:quit
+    . R *ch
+    . i ch=10 q  ;skip LF
+    . I ch'=13 S line=line_$c(ch) q  ;build input line
+    . I line'="" D  Q
+    . . I 'first d
+    . . . S attr=$tr($P(line,": "),%upper,%lower)
+    . . . s %reqprops(attr)=$p(line,": ",2)
+    . . E  S %request=line,first=0
+    . . S line=""
+    . S quit=1 r *ch  ;read LF that occurs just before content data
+    q
+    ;
+    ; get request data, one line at a time
+    ;   used by GT.M in xinetd mode
+    ;
+getReqL n quit,line,attr,first,seq
+    k %reqprops
+    ;u $p:(delimiter=$c(13,10):NOWRAP:NOECHO)
+    u %dev:/TERM=$c(13,10)
+    s quit=0,line="",first=1
+    f  d  q:quit
+    . r line
+    . i line="" s quit=1 q
+    . i first s %request=line,first=0
+    . e  d
+    . . s attr=$tr($p(line,": "),%upper,%lower)
+    . . s %reqprops(attr)=$p(line,": ",2)
+    l +^httpLog
+    s seq=$o(^httpLog(""),-1)+1
+    s ^httpLog(seq)=%request
+    l -^httpLog
+    q
+    ;
+    ; dump arrays to html page
+    ;
+dump n i
+    w "<html><head><title>dump</title></head><body>",!
+    w "<table border>",!
+    w "<tr><td>Request</td><td>",%request,"</td></tr>",!
+    w "<tr><td>Method</td><td>",%method,"</td></tr>",!
+    w "<tr><td>Action</td><td>",%action,"</td></tr>",!
+    s i=""
+    f  s i=$o(%reqprops(i)) q:i=""  d
+    . w "<tr>",!
+    . w "<td>",i,"</td>",!
+    . w "<td>",$$escape^html(%reqprops(i)),"</td>",!
+    . w "</tr>",!
+    w "</table>",!
+    w "Cookie:<br /><table border>",!
+    f  s i=$o(%cookie(i)) q:i=""  d
+    . w "<tr>",!
+    . w "<td>",i,"</td>",!
+    . w "<td>",$$escape^html(%cookie(i)),"</td>",!
+    . w "</tr>",!
+    w "Data: ",%content,"<br /><table border>",!
+    f  s i=$o(%data(i)) q:i=""  d
+    . w "<tr>",!
+    . w "<td>",i,"</td>",!
+    . w "<td>",$$escape^html(%data(i)),"</td>",!
+    . w "</tr>",!
+    w "</table></body></html>",!
+    q
+    ;
+    ; extract data from request
+    ;
+extrData n object,i,value,cookie,next
+    k %data
+    s %method=$p(%request," "),%content=""
+    i %method="GET" d GET
+    e  i %method="POST" d POST
+    e  d UNK q
+    f i=1:1:$l(%content,"&") d
+    . s object=$p($p(%content,"&",i),"=")
+    . i object="" q
+    . s value=$p($p(%content,"&",i),"=",2)
+    . d Hex^html(.value)
+    . i '$d(%data(object)) s %data(object)=value
+    . e  d
+    . . s next=$o(%data(object,""),-1)+1
+    . . s %data(object,next)=value
+    i $d(%reqprops("cookie")) d
+    . f i=1:1:$l(%reqprops("cookie"),";") d
+    . . s cookie=$p(%reqprops("cookie"),";",i)
+    . . s %cookie($p(cookie,"="))=$p(cookie,"=",2)
+    q
+    ;
+    ; extract data from GET request
+    ;
+GET s %action=$p($p(%request," ",2),"?")
+    s %content=$p($p(%request," ",2),"?",2)
+    q
+    ;
+    ; get data for POST request
+    ;
+POST s %action=$p(%request," ",2)
+    r %content#%reqprops("content-length")
+    s %content=$tr(%content,$c(10),"")
+    q
+    ;
+    ; unknown method received
+    ;
+UNK w "<html><head><title>Unknown Method</title></head>"
+    w "<body><h1>An unknown page retrieval method was received</h1></body>"
+    w "</html>"
+    q
+    ;
+    ; process the request
+    ;
+procReq n i,j,quit,buf,pgmName,path
+    ; check for static content
+    s %static="",%pgm="",quit=0
+    f  s %static=$o(^httpd("STATIC",%static)) q:%static=""  d  q:quit
+    . i %static=$e(%action,1,$l(%static)) s %pgm="^htmlStatic",quit=1
+    ; check for dynamic content
+    i %pgm="" s %pgm=$g(^httpd(%method,%action))
+    i %pgm="" d
+    . d Err^html("Invalid Function","The "_%action_" function you have requested does not exist!")
+    e  d
+    . k ^httpout($j)  ;make sure nothing is lying around
+    . i %pgm[".html" d htmlPage(%pgm)
+    . e  i %pgm[".incl" d incl(%pgm)
+    . e  d @%pgm
+    . i '$d(^httpout($j)) q  ;nothing to output using a template
+    . ;
+    . s $x=0,$y=0
+    . ;u $p:(delimiter=$c(13,10):NOWRAP)
+    . s buf=""
+    . s buf="HTTP/1.1 200 OK"_%crlf
+    . i $d(^httpout($j,"COOKIE")) s buf=buf_"Set-Cookie: "_^httpout($j,"COOKIE")_%crlf
+    . s buf=buf_%crlf
+    . ;
+    . ; walk through template and substitute content as required
+    . s i=""
+    . f  s i=$o(^httpd("TMPL",%tmpl,i)) q:i=""  d
+    . . ;
+    . . ;send substitutions at the appropriate place
+    . . i ^httpd("TMPL",%tmpl,i)="<!--TITLE-->" s buf=buf_$g(^httpout($j,"TITLE")) q
+    . . i ^httpd("TMPL",%tmpl,i)="<!--STYLE-->" d  q
+    . . . s j=""
+    . . . f  s j=$o(^httpd("SS",%style,j)) q:j=""  d
+    . . . . s buf=buf_^httpd("SS",%style,j)
+    . . i ^httpd("TMPL",%tmpl,i)="<!--ONLOAD-->" s buf=buf_$g(^httpout($j,"ONLOAD")) q
+    . . i ^httpd("TMPL",%tmpl,i)="<!--HEADER-->" s buf=buf_$g(^httpout($j,"HEADER")) q
+    . . i ^httpd("TMPL",%tmpl,i)="<!--MESSAGE-->" s buf=buf_$g(^httpout($j,"MESSAGE")) q
+    . . i ^httpd("TMPL",%tmpl,i)="<!--BREADCRUMBS-->" d  q
+    . . . s bc=""
+    . . . f  s bc=$o(^httpout($j,"BC",bc)) q:bc=""  d
+    . . . . s buf=buf_$g(^httpout($j,"BC",bc))
+    . . i ^httpd("TMPL",%tmpl,i)="<!--MENU-->",%menu'="" d  q
+    . . . s j=""
+    . . . f  s j=$o(^httpd("MENU",%menu,j)) q:j=""  d
+    . . . . s buf=buf_^httpd("MENU",%menu,j)
+    . . i ^httpd("TMPL",%tmpl,i)="<!--CONTENT-->" d  q
+    . . . s buf=buf_$g(^httpout($j,"C"))
+    . . . s j=""
+    . . . f  s j=$o(^httpout($j,"C",j)) q:j=""  d
+    . . . . s buf=buf_^httpout($j,"C",j)
+    . . ;
+    . . ;otherwise, send template line
+    . . s buf=buf_^httpd("TMPL",%tmpl,i)
+    . w buf,!
+    . s $x=0,$y=0
+    . k ^httpout($j)  ;clean up after ourselves
+    q
+    ;
+    ; serve an html page
+    ;
+htmlPage(page) n line
+    s page=^httpd("DIR","HTML")_page
+    o page
+    s x=$view("proc",5,0)
+    f  u page r line q:$ZEOF  d
+    . u $p w line,!
+    c page
+    q
+    ;
+    ; incorporate an include file as the content
+    ;
+incl(filenm) n j,line
+    s filenm=^httpd("DIR","INCL")_filenm
+    o filenm u filenm
+    r line
+    s ^httpout($j,"TITLE")=$p(line,"=",2)
+    r line
+    s ^httpout($j,"ONLOAD")=$p(line,"=",2)
+    r line
+    s ^httpout($j,"HEADER")=$p(line,"=",2)
+    r line
+    s ^httpout($j,"MESSAGE")=$p(line,"=",2)
+    r ^httpout($j,"C")
+    s j=1
+    f  r ^httpout($j,"C",j) q:$ZEOF  d
+    . s j=j+1
+    c filenm
+    q
+    ;
+    ; load a template definition into ^httpd("TMPL")
+    ;
+loadtmpl ;n fnm,i,line,tmpl
+    w "Template file name: " r tmpl w !
+    i tmpl="" q
+    s fnm="|FILE|c:\MiniM\templates\"_tmpl
+    o fnm
+    u fnm
+    k ^httpd("TMPL",tmpl)
+    s x=$view("proc",5,0)
+    s i=1
+    f  r line q:$ZEOF  d
+    . s ^httpd("TMPL",tmpl,i)=line
+    . s i=i+1
+    c fnm
+    w !,"Done.",!
+    q
+    ;
+    ; dump template from ^httpd("TMPL") to a file
+    ;
+dumptmpl n fnm,ln
+    w "Template file name: " r fnm w !
+    i fnm="" q
+    s tmpl=$p(fnm,"\",$l(fnm,"\"))
+    s fnm="|FILE|"_fnm
+    o fnm:("nw") u fnm
+    s ln=""
+    f  s ln=$o(^httpd("TMPL",tmpl,ln)) q:ln=""  w ^httpd("TMPL",tmpl,ln),!
+    c fnm
+    q
+    ;
+    ; load a menu definition into ^httpd("MENU")
+    ;
+loadmenu w "Menu file name: "
+    r menu
+    i menu="" q
+    s fnm="|FILE|c:\MiniM\templates\"_menu
+    o fnm:("r") u fnm
+    k ^httpd("MENU",menu)
+    s x=$view("proc",5,0)
+    s i=1
+    f  r line q:$ZEOF  d
+    . s ^httpd("MENU",menu,i)=line
+    . s i=i+1
+    c fnm
+    w !,"Done.",!
+    q
+    ;
+    ; load a style sheet into ^httpd("SS")
+    ;
+loadss w "Style sheet name: "
+    r ss
+    i ss="" q
+    s fnm="|FILE|c:\MiniM\templates\"_ss
+    o fnm:("r") u fnm
+    k ^httpd("SS",ss)
+    s x=$view("proc",5,0)
+    s i=1
+    f  r line q:$ZEOF  d
+    . s ^httpd("SS",ss,i)=line
+    . s i=i+1
+    c fnm
+    w !,"Done.",!
+    q
+    ;
+    ; session handling
+    ;   check if cookie already set
+    ;   else create session id, prepare global
+    ;   if set create variable %sid that holds indirection global
+    ;
+session() n sid,ok
+    s %sid="",ok=0
+    ; entered from Logon screen
+    i $g(%data("clicked"))="Logon" d
+    . s sid=$h_","_$j
+    . s ^httpout($j,"COOKIE")="sid="_sid
+    . s %cookie("sid")=sid
+    . s %sid="^session("_sid_")"
+    . k @%sid  ;ensure nothing already exists
+    . s @%sid@("%user")=%data("user")
+    . k %data("clicked")  ;make sure this code is not run twice
+    . s ok=1
+    ; did not enter from login screen and no cookie set
+    e  i '$d(%cookie("sid")) d
+    . d ^webRoot
+    . s ok=0
+    ; cookie available, session exists
+    e  d
+    . i %cookie("sid")="" d  q
+    . . d ^webRoot
+    . . s ok=0
+    . s %sid="^session("_%cookie("sid")_")"
+    . s ok=1
+    . i '$d(@%sid@("%user")) d
+    . . d ^webRoot
+    . . s ok=0
+    q ok
+    ;
+    ; remove all session information
+    ;
+logoff i '$$session() q
+    k @%sid
+    s ^httpout($j,"COOKIE")="sid="
+    d addt^html("Logged Out")
+    d addc^html("<h2>This session has been terminated.</h2>")
+    d addc^html("<a href=""/"">Login</a>")
+    q
+ 
 

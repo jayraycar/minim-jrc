@@ -1,4 +1,26 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+thesQry
+thesQry ;Query the Moby thesaurus entries
+    ; James Carthew 5 Sep 2010
+    ;
+    s quit=0
+    f  d  q:quit
+    . w "Lookup? "
+    . r word w !
+    . i word="" s quit=1 q
+    . w "Word length? "
+    . r len w !
+    . i '$d(^thesNdx(word)) w "Not found!",!,!
+    . s root=""
+    . f  s root=$o(^thesNdx(word,root)) q:root=""  d
+    . . w "Root=",root,!
+    . . s alt=""
+    . . f  s alt=$o(^thesRoot(root,alt)) q:alt=""  d
+    . . . i len>0 d
+    . . . . i $l(alt)=len w "    ",alt,!
+    . . . e  w "    ",alt,!
+    . . w !
+    q
+ 
 

@@ -1,4 +1,17 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+testing
+testing ; various testing of code
+    s $et="g tag1"
+    s x="abc"
+    s y(1)="urtuyr"
+    s y(2)="gfsaskdfj"
+    s a=1/0
+    q
+    ;
+    ;
+tag1 w "in tag1",!
+    w
+    q
+    
 

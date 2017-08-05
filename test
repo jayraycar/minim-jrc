@@ -1,4 +1,17 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+test
+test ; misc testing code
+    n zeof=$v("proc",5,0)
+    n dev="|PIPE|c:\minimDat\sha256sum"
+    n resp
+    o dev:("rwt")
+    u dev
+    w "0xygen16",!
+    f  q:$zeof  d
+    . r resp
+    u $p w resp,!
+    c dev
+    i $v("proc",5,zeof)
+    q
 

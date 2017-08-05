@@ -1,4 +1,28 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+vc
+vc  ; Interface to external version control
+    ;
+export
+    w "Exporting routines for version control...",!
+    s dir="c:\minimDat\"_$znspace_"\"
+    s rnm=""
+    f  s rnm=$o(^ROUTINE(rnm)) q:rnm=""  d
+    . w rnm,!
+    . s expFnm=dir_rnm
+    . s io=$io
+    . s dev="|FILE|"_expFnm o dev:("wtn"):1 e  u io d  q
+    . . i show w "Failed to use ",expFnm,!
+    . u dev
+    . w " ; ~Format=ANSI.S~",!
+    . w "%RO Version Control",!
+    . ; write all routines line-by-line using ANSI format
+    . s n=0
+    . w rnm,!
+    . s line=0 f  s line=$o(^ROUTINE(rnm,line)) q:+line'=line  s s=^ROUTINE(rnm,line) s:s="" s=" " w s,!
+    . w ! ; end of routine
+    . u io
+    . c dev
+    q
+ 
 

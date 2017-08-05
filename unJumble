@@ -1,4 +1,17 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+unJumble
+unJumble(s) ; find words that fit jumbled letters
+    ; 16 Aug 2010
+    ;
+    n w,x
+    s s=$ZLCASE(s)
+    s s=$$sortL^libW(s)
+    s size=$l(s)
+    s w=""
+    f  s w=$o(^word(w)) q:w=""  d
+    . i $l(w)'=size q
+    . s x=$$sortL^libW(w)
+    . i x=s w w,!
+    q
 

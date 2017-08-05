@@ -1,4 +1,104 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+catAcc
+catAcc ; Categorize transaction descriptions to accounts
+    w "Not yet implemented",!
+    q
+    ;
+    ; Train the categorization algorithm
+    ; from tab delimited file
+    ;
+loadTraining(fileName) n %s1,line,descr,acc,amount,next,tokens
+    k ^train
+    s %s1=$c(9)
+    s fileName="import/"_fileName
+    o fileName:(readonly)
+    f  u fileName r line q:$ZEOF  d
+    . s descr=$p(line,%s1,1)
+    . i descr="Narrative" q
+    . s acc=$p(line,%s1,4)
+    . s amount=$p(line,%s1,2)
+    . i amount=0 s amount=$p(line,%s1,3)
+    . s next=$o(^train(acc,""),-1)+1
+    . k tokens
+    . d tokenize(descr,"tokens")
+    . m ^train(acc,next)=tokens
+    c fileName
+    d freq
+    q
+    ;
+    ; tokenize description
+    ;
+tokenize(str,array,breaks) n i,token,cnt,start,end
+    i $g(breaks)="" s breaks=" -.!?,""'"
+    s str=$$FUNC^%LCASE(str)
+    s start=1
+    s end=1
+    s cnt=0
+    f i=1:1:$l(str) d
+    . i breaks[$e(str,i) d
+    . . s end=i-1
+    . . s token=$e(str,start,end)
+    . . i token'="" d
+    . . . s cnt=cnt+1
+    . . . s @array@(cnt)=token
+    . . s start=i+1
+    ; pick up the last one
+    s end=i
+    s token=$e(str,start,end)
+    i token'="" d
+    . s cnt=cnt+1
+    . s @array@(cnt)=token
+    q
+    ;
+    ; count frequencies
+    ;
+freq n cat,inst,tokenNum,token
+    k ^tokens
+    s cat=""
+    f  s cat=$o(^train(cat)) q:cat=""  d
+    . s inst=""
+    . f  s inst=$o(^train(cat,inst)) q:inst=""  d
+    . . s tokenNum=""
+    . . f  s tokenNum=$o(^train(cat,inst,tokenNum)) q:tokenNum=""  d
+    . . . s token=^train(cat,inst,tokenNum)
+    . . . s ^tokens(token)=$g(^tokens(token))+1
+    . . . s ^tokens(token,cat)=$g(^tokens(token,cat))+1
+    q
+    ;
+    ; assign probabilities to tokens in an account description
+    ;
+assign(str) n i,token,denom,num,cat,probArray,prob,max,catList,tokens
+    ; create an array containing summed probabilities of all tokens
+    ; this provides a score for each token
+    k sorted,probTokens
+    d tokenize(str,"tokens")
+    s i=""
+    f  s i=$o(tokens(i)) q:i=""  d
+    . s cat=""
+    . f  s cat=$o(^tokens(token,cat)) q:cat=""  d
+    . . s prob=$$tokenProb(token,cat)
+    . . s probArray(cat)=$g(probArray(cat))+prob
+    . . s probTokens(cat)=$g(probTokens(cat))_token_"|"
+    ; create an array sorted by scores
+    s cat=""
+    f  s cat=$o(probArray(cat)) q:cat=""  d
+    . s sorted(probArray(cat),cat)=""
+    s max=$o(sorted(""),-1)
+    s cat="",catList=""
+    f  s cat=$o(sorted(max,cat)) q:cat=""  d
+    . i catList'="" s catList=catList_"|"
+    . s catList=catList_cat
+    q catList
+    ;
+    ; calculate the probability that a token belongs to a category
+    ;
+tokenProb(token,cat) n prob,num,denom,i
+    s denom=$g(^tokens(token))
+    i denom="" q 0
+    s num=$g(^tokens(token,cat),0)
+    s prob=num/denom
+    q prob
+ 
+ 
 

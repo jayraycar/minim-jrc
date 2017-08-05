@@ -1,4 +1,164 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+snomedCT
+snomedCT ; routines for snomedCT processing
+    ; James Carthew 25Nov2011
+    ;
+    q
+    ;
+    ; load concepts from text file
+    ;
+ldConcepts n fnm,line,s1,d1,id,status,name,isPrim,cnt
+    s s1=$c(9)
+    s d1="|"
+    s fnm="../../SNOMED CT/Essential Resources/SNOMED CT Terminology/Content/sct_concepts_20080131.txt"
+    o fnm:(readonly)
+    i '$T w "Can't open ",fnm,! q
+    u fnm
+    r line ; skip headings
+    s cnt=0
+    f  r line q:$ZEOF  d
+    . s line=$tr(line,$c(13)_$c(10),"")
+    . s cnt=cnt+1
+    . i cnt#10000=0 u $p w cnt,! u fnm
+    . s id=$p(line,s1)
+    . s status=$p(line,s1,2)
+    . s name=$p(line,s1,3)
+    . s isPrim=$p(line,s1,6)
+    . s ^concepts(id)=name_d1_isPrim_d1_status
+    c fnm
+    w "Loaded ",cnt," concepts",!
+    q
+    ;
+    ; load descriptions
+    ;
+ldDescr n fnm,line,s1,d1,id,status,cnt,conId,term,iCapStat,dType,lang
+    s s1=$c(9)
+    s d1="|"
+    s fnm="../../SNOMED CT/Essential Resources/SNOMED CT Terminology/Content/sct_descriptions_20080131.txt"
+    o fnm:(readonly)
+    i '$T w "Can't open ",fnm,! q
+    u fnm
+    r line ; skip headings
+    s cnt=0
+    f  r line q:$ZEOF  d
+    . s line=$tr(line,$c(13)_$c(10),"")
+    . s cnt=cnt+1
+    . i cnt#10000=0 u $p w cnt,! u fnm
+    . s id=$p(line,s1)
+    . s status=$p(line,s1,2)
+    . s conId=$p(line,s1,3)
+    . s term=$p(line,s1,4)
+    . s iCapStat=$p(line,s1,5)
+    . s dType=$p(line,s1,6)
+    . s lang=$p(line,s1,7)
+    . s ^descriptions(id)=conId_d1_term_d1_status_d1_iCapStat_d1_dType_d1_lang
+    c fnm
+    w "Loaded ",cnt," descriptions",!
+    q
+    ;
+    ; load relationships
+    ;
+ldRel n fnm,line,s1,d1,id,cnt,conId1,conId2,relType,relGrp,charType,ref
+    s s1=$c(9)
+    s d1="|"
+    s fnm="../../SNOMED CT/Essential Resources/SNOMED CT Terminology/Content/sct_relationships_20080131.txt"
+    o fnm:(readonly)
+    i '$T w "Can't open ",fnm,! q
+    u fnm
+    r line ; skip headings
+    s cnt=0
+    f  r line q:$ZEOF  d
+    . s line=$tr(line,$c(13)_$c(10),"")
+    . s cnt=cnt+1
+    . i cnt#10000=0 u $p w cnt,! u fnm
+    . s id=$p(line,s1)
+    . s conId1=$p(line,s1,2)
+    . s relType=$p(line,s1,3)
+    . s conId2=$p(line,s1,4)
+    . s charType=$p(line,s1,5)
+    . s ref=$p(line,s1,6)
+    . s relGrp=$p(line,s1,7)
+    . s ^relationships(id)=relType_d1_conId1_d1_conId2_d1_relGrp_d1_charType_d1_ref
+    c fnm
+    w "Loaded ",cnt," relationships",!
+    q
+    ;
+    ; create IS_A relationship indexed
+    ;
+crRelIdx n id,d1
+    s d1="|"
+    s id=""
+    f  s id=$o(^relationships(id)) q:id=""  d
+    . i $p(^(id),d1)'="116680003" q
+    . s ^relIdx($p(^(id),d1,2),$p(^(id),d1,3))=id
+    q
+    ;
+    ; create reverse IS_A indexed
+    ;
+crRevIdx n id,d1
+    s d1="|"
+    s id=""
+    f  s id=$o(^relationships(id)) q:id=""  d
+    . i $p(^(id),d1)'="116680003" q
+    . s ^revIdx($p(^(id),d1,3),$p(^(id),d1,2))=id
+    q
+    ;
+    ; display concept tree
+    ;
+tree n child,name,d1
+    s d1="|"
+    w "Concept Id: "
+    r child
+    w !,!
+    i child="" q
+    s name=$p($g(^concepts(child)),d1)
+    i name="" w "Concept does not exist!",! q
+    w name,!
+    d show(child,1)
+    q
+    ;
+    ; show the tree
+    ;
+show(child,lvl) n parent,d1
+    s d1="|"
+    s parent=""
+    f  s parent=$o(^relIdx(child,parent)) q:parent=""  d
+    . s name=$p($g(^concepts(parent)),d1)
+    . w ?(lvl*3),name,!
+    . d show(parent,lvl+1)
+    q
+    ;
+    ; show children to one level
+    ;
+children n parent,child,d1,name
+    s d1="|"
+    w "Concept Id: "
+    r parent
+    w !,!
+    i parent="" q
+    s name=$p($g(^concepts(parent)),d1)
+    i name="" w "Concept does not exist!",! q
+    w name,!
+    s child=""
+    f  s child=$o(^revIdx(parent,child)) q:child=""  d
+    . s name=$p($g(^concepts(child)),d1)
+    . w ?4,child," ",name,!
+    q
+    ;
+    ; find concept
+    ;
+find n id,d1
+    s d1="|"
+    w "Concept: "
+    r phrase
+    w !
+    i phrase="" q
+    s phrase=$$FUNC^%lcase(phrase)
+    s id=""
+    f  s id=$o(^concepts(id)) q:id=""  d
+    . s name=$$FUNC^%lcase($p(^(id),d1))
+    . i $f(name,phrase) w id," ",name,!
+    q
+ 
 

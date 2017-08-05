@@ -1,4 +1,473 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+json
+json ;routines for handling JSON objects in GT.M
+    ;James Carthew 4 Feb 2009
+    ;
+    ;
+    ; str can be an array, pass it in using dot notation
+    ; obj is the name of an array to put JSON object into.
+    ;   Pass it in as a string
+    ; returns 1 for success
+    ;         0 for error
+decode(str,obj) n sub,pos,quit,ws,err
+    s ws=",:}] "_$c(9,10,13)  ;white space characters
+    s sub=$o(str("")),err=0,quit=0
+    i sub="" d errMsg("There is no document","","",obj) q 0
+    s pos=1
+    ;find the start of a JSON document, ignore anything else
+    ;process the document
+    ;call appropriate decoding subroutines as necessary
+    f  d  q:quit
+    . i $e(str(sub),pos)="{" s err=$$decObj(.str,.sub,.pos,obj) s quit=1 q
+    . i $e(str(sub),pos)="[" s err=$$decList(.str,.sub,.pos,obj) s quit=1 q
+    . s pos=pos+1
+    . i pos>$l(str(sub)) s sub=$o(str(sub)),pos=1
+    . i sub="" s quit=1
+    q 'err
+    ;
+    ; decode a JSON object
+    ;   str is the array containing the JSON document
+    ;   sub is the current line subscript
+    ;   pos is the current character in the line
+    ;   obj is the name of the variable to contain the JSON object
+    ; returns 1 for error
+    ;         0 for no error
+decObj(str,sub,pos,obj) n quit,isAttr,attrName,string,tmp,err
+    s quit=0,isAttr=1,attrName="",err=0
+    f  d  q:quit
+    . i sub="" s err=1,quit=1 d errMsg("Premature end of document, expecting '}'",sub,pos,obj) q
+    . s pos=pos+1
+    . i pos>$l(str(sub)) s sub=$o(str(sub)),pos=1
+    . i str(sub)="" q  ;empty line, just move to next line
+    . ;switch between attribute name and value
+    . i isAttr,$e(str(sub),pos)=":" s isAttr=0 q
+    . i 'isAttr,$e(str(sub),pos)="," d  q
+    . . s attrName=""
+    . . s isAttr=1
+    . ;end of JSON object found
+    . i $e(str(sub),pos)="}" s quit=1 q
+    . ;unexpected closing ']'
+    . i $e(str(sub),pos)="]" s err=1,quit=1 d errMsg("Found ']', expecting '}'",sub,pos,obj) q
+    . ;start of JSON object found
+    . i $e(str(sub),pos)="{" d  q
+    . . s tmp="s"_sub_"p"_pos
+    . . s err=$$decObj(.str,.sub,.pos,tmp)
+    . . i err s quit=1,err=1 q
+    . . i 'isAttr m @obj@(attrName)=@tmp
+    . . e  d errMsg("Attribute names cannot be objects",sub,pos,obj) s err=1,quit=1 q
+    . . k @tmp
+    . ;start of JSON list found
+    . i $e(str(sub),pos)="[" d  q
+    . . s tmp="s"_sub_"p"_pos
+    . . s err=$$decList(.str,.sub,.pos,tmp)
+    . . i err s quit=1,err=1 q
+    . . i 'isAttr m @obj@(attrName)=@tmp
+    . . e  d errMsg("Attribute names cannot be lists",sub,pos,obj) s quit=1,err=1 q
+    . . k @tmp
+    . ;start of a string
+    . i $e(str(sub),pos)="""" d  q
+    . . s string=$$decString(.str,.sub,.pos,obj)
+    . . i isAttr d
+    . .. i string'="" s attrName=string
+    . .. e  d errMsg("Empty attribute name encountered",sub,pos,obj) s quit=1,err=1 q
+    . . e  s @obj@(attrName)=string
+    . ;start of a non-string value
+    . i ws'[$e(str(sub),pos) d
+    . . i 'isAttr s @obj@(attrName)=$$decOther(.str,.sub,.pos,obj)
+    . . e  d errMsg("Illegal value found for attribute name",sub,pos,obj)
+    q err
+    ;
+    ; decode a JSON list
+    ;   str is the array containing the JSON document
+    ;   sub is the current line subscript
+    ;   pos is the current character in the line
+    ;   obj is the name of the variable to contain the JSON object
+    ; returns 0 for no error
+    ;         1 for error
+    ;
+decList(str,sub,pos,obj) n quit,seq,tmp,err
+    s quit=0,seq=1,err=0
+    f  d  q:quit
+    . s pos=pos+1
+    . i pos>$l(str(sub)) s sub=$o(str(sub)),pos=1
+    . i sub="" s err=1,quit=1 d errMsg("Premature end of document, expecting ']'",sub,pos,obj) q
+    . ;end of JSON list found
+    . i $e(str(sub),pos)="]" s quit=1 q
+    . ;unexpected '}' found
+    . i $e(str(sub),pos)="}" s err=1,quit=1 d errMsg("Found '}', expecting ']'",sub,pos,obj) q
+    . i $e(str(sub),pos)="," s seq=seq+1  q
+    . ;start of JSON object found
+    . i $e(str(sub),pos)="{" d  q
+    . . s tmp="s"_sub_"p"_pos
+    . . s err=$$decObj(.str,.sub,.pos,tmp)
+    . . i err s quit=1 q
+    . . m @obj@(seq)=@tmp
+    . . k @tmp
+    . ;start of JSON list found
+    . i $e(str(sub),pos)="[" d
+    . . s tmp="s"_sub_"p"_pos
+    . . s err=$$decList(.str,.sub,.pos,obj)
+    . . i err s quit=1 q
+    . . m @obj@(seq)=@tmp
+    . . k @tmp
+    . ;start of a string
+    . i $e(str(sub),pos)="""" d  q
+    . . s @obj@(seq)=$$decString(.str,.sub,.pos,obj)
+    . ;start of a non-string value
+    . i ws'[$e(str(sub),pos) d
+    . . s @obj@(seq)=$$decOther(.str,.sub,.pos,obj)
+    q err
+    ;
+    ; decode a JSON string
+    ;
+decString(str,sub,pos,obj) n quit,out
+    s quit=0,out=""
+    f  d  q:quit
+    . s pos=pos+1
+    . i pos>$l(str(sub)) s sub=$o(str(sub)),pos=1
+    . i sub="" s quit=1 d errMsg("Premature end of document, expecting '""'",sub,pos,obj) q
+    . i $e(str(sub),pos)="""" s quit=1 q  ;end of a string
+    . ;check for escaped characters
+    . i $e(str(sub),pos)="\" d
+    . . s pos=pos+1  ;potential danger here if string split across lines
+    . . i $e(str(sub),pos)="""" s out=out_""""
+    . . i $e(str(sub),pos)="\" s out=out_"\"
+    . . i $e(str(sub),pos)="b" s out=out_$c(8)   ;backspace
+    . . i $e(str(sub),pos)="f" s out=out_$c(12)  ;form feed
+    . . i $e(str(sub),pos)="n" s out=out_$c(10)  ;line feed
+    . . i $e(str(sub),pos)="r" s out=out_$c(13)  ;carriage return
+    . . i $e(str(sub),pos)="t" s out=out_$c(9)   ;tab
+    . . i $e(str(sub),pos)="u" d                 ;hexadecimal character
+    . .. s out=out_$c($$FUNC^%HD($e(str(sub),pos+1,pos+4)))
+    . .. s pos=pos+4  ;potential danger here if string split across lines
+    . . ;skip control characters, they are illegal
+    . . i $a($e(str(sub),pos))'<0,$a($e(str(sub),pos))<32 s pos=pos+1
+    . e  s out=out_$e(str(sub),pos)
+    q out
+    ;
+    ; decode a non-string entry - a number, true, false, null
+    ;
+decOther(str,sub,pos,obj) n out,quit,ok
+    s out="",quit=0
+    f  d  q:quit
+    . i pos>$l(str(sub)) s sub=$o(str(sub)),pos=1
+    . i sub="" s quit=1 d errMsg("Premature end of document, expecting whitespace",sub,pos,obj) q
+    . i ws[$e(str(sub),pos) s quit=1 q  ;end of a non-string sequence
+    . s out=out_$e(str(sub),pos)
+    . s pos=pos+1
+    ;check if non-string sequence is valid
+    s ok=0
+    ;check if it is a number
+    i out?0.1"-".N0.1".".N0.1"e"0.1"E"0.1"+"0.1"-".N s ok=1
+    ;check if it is one of the three literal values
+    i out'="","true,false,null"[out s ok=1
+    i 'ok s out="" d errMsg("Invalid literal value or not a number",sub,pos,obj)
+    s pos=pos-1
+    i out="null" s out=""  ;convert the word null to a null value
+    q out
+    ;
+    ; leave an error message
+    ;
+errMsg(msg,sub,pos,obj) s @$qs(obj,0)="Error|"_msg_"|line: "_sub_", character: "_pos q
+    ;
+    ; test routines
+    ;
+testHelper n a,b,ok
+    ; check expectation is the same as generated
+    s ok=1
+    f a="json","exp" d
+    . f  s a=$q(@a) q:a=""  d
+    . . s b=a
+    . . i $qs(a,0)="json" s $p(b,"(",1)="exp"
+    . . e  s $p(b,"(",1)="json"
+    . . i '$d(@b) d
+    . . . s ok=0
+    . . e  i @a'=@b s ok=0
+    i ok w "."
+    e  w "E"
+    q
+    ;
+    ; special testing
+    ;
+jrc w "Testing failed encoding ",!
+    k d
+    s d(1)="{""t_name"": ""surname"", ""surname"":""carthew"", ""freq"":23}"
+    s ok=$$decode(.d,"%json")
+    q
+    ;
+    ; test decoding of JSON objects
+    ;
+testDec
+    w "Testing JSON decoding "
+    ; set up JSON object - simple object
+    k d,json,exp
+    s d(1)="{ ""colour"" : ""blue"","
+    s d(2)="    ""shape"" : ""square"","
+    s d(3)="    ""size"" : 2,"
+    s d(4)="    ""available"" : true}"
+    s exp("colour")="blue"
+    s exp("shape")="square"
+    s exp("size")=2
+    s exp("available")="true"
+    i '$$decode(.d,"json") w "Error occurred",! q
+    d testHelper
+    ;
+    ; set up JSON object - simple list
+    ;
+    k d,exp,json
+    s d(1)="[""one"",""two"",""three"",false]"
+    s exp(1)="one"
+    s exp(2)="two"
+    s exp(3)="three"
+    s exp(4)="false"
+    i '$$decode(.d,"json") w "Error occurred",! q
+    d testHelper
+    ;
+    ; set up JSON object - simple list over multiple lines
+    ;
+    k d,exp,json
+    s d(1)="[""one"",""two"","
+    s d(2)="""three"",false]"
+    s exp(1)="one"
+    s exp(2)="two"
+    s exp(3)="three"
+    s exp(4)="false"
+    i '$$decode(.d,"json") w "Error occurred",! q
+    d testHelper
+    ;
+    ; set up JSON object - list with object
+    ;
+    k d,exp,json
+    s d(1)="[""one"",{""shape"" : ""triangle""}]"
+    s exp(1)="one"
+    s exp(2,"shape")="triangle"
+    i '$$decode(.d,"json") w "Error occurred",! q
+    d testHelper
+    ;
+    ; set up JSON object - complex document
+    k d,exp,json
+    s d(1)="{""rules"" : "
+    s d(2)="["
+    s d(3)="    {""ruleName"" : ""01"","
+    s d(4)="        ""if"" : [{""attr"" : ""billable"", ""op"" : ""="", ""value"" : ""false""}],"
+    s d(5)="        ""then"" : [{""attr"" : ""pei"", ""value"" : ""None"", ""cert"" : 100}]"
+    s d(6)="    }"
+    s d(7)="],"
+    s d(8)=" ""attributes"" : ""there are some"""
+    s d(9)="}"
+    s exp("rules",1,"ruleName")="01"
+    s exp("rules",1,"if",1,"attr")="billable"
+    s exp("rules",1,"if",1,"op")="="
+    s exp("rules",1,"if",1,"value")="false"
+    s exp("rules",1,"then",1,"attr")="pei"
+    s exp("rules",1,"then",1,"value")="None"
+    s exp("rules",1,"then",1,"cert")=100
+    s exp("attributes")="there are some"
+    ;
+    i '$$decode(.d,"json") w "Error occurred",! q
+    d testHelper
+    ;
+    ; set up JSON object - complex document
+    k d,exp,json
+    s d(1)="{""rules"" :"
+    s d(2)="    {""01"" : { ""if"" : [{""attr"" : ""billable"", ""op"" : ""="", ""value"" : ""false""}],"
+    s d(3)="                ""then"" : [{""attr"" : ""pei"", ""value"" : ""None"", ""cert"" : 100}]"
+    s d(4)="        }"
+    s d(5)="    },"
+    s d(6)=" ""attributes"" : ""there are some"""
+    s d(7)="}    "
+    s exp("rules","01","if",1,"attr")="billable"
+    s exp("rules","01","if",1,"op")="="
+    s exp("rules","01","if",1,"value")="false"
+    s exp("rules","01","then",1,"attr")="pei"
+    s exp("rules","01","then",1,"cert")=100
+    s exp("rules","01","then",1,"value")="None"
+    s exp("attributes")="there are some"
+    i '$$decode(.d,"json") w "Error occurred",! q
+    d testHelper
+    w !
+    q
+    ;
+    ; start a JSON list
+    ;
+stList(%json) n nextSub
+    s nextSub=$o(@%json@(""),-1)+1
+    s @%json@(nextSub)="["
+    q
+    ;
+    ; end a JSON list
+    ;
+endList(%json) n nextSub
+    s nextSub=$o(@%json@(""),-1)+1
+    s @%json@(nextSub)="]"
+    q
+    ;
+    ; start JSON object
+    ;
+stObj(%json) n nextSub
+    s nextSub=$o(@%json@(""),-1)+1
+    s @%json@(nextSub)="{"
+    q
+    ;
+    ; end JSON object
+    ;
+endObj(%json) n nextSub
+    s nextSub=$o(@%json@(""),-1)+1
+    s @%json@(nextSub)="}"
+    q
+    ;
+    ; add object member name/value pair
+    ; available types are:
+    ;   bool
+    ;   null
+    ;   string
+    ;   number
+    ;   object
+    ;   list
+    ;
+addMember(%json,name,value,type) n curSub,nextSub
+    s curSub=$o(@%json@(""),-1)
+    i curSub="" d errMsg("Invalid start of document","","",%json) q ; must have a previous subscript
+    s nextSub=curSub+1
+    i @%json@(curSub)'="{" d
+    . s @%json@(nextSub)=","
+    . s nextSub=nextSub+1
+    s @%json@(nextSub)=""""_name_""""
+    s nextSub=nextSub+1
+    s @%json@(nextSub)=":"
+    s nextSub=nextSub+1
+    i type="bool" d
+    . i %UCASE(value)="TRUE"!(value=1) s @%json@(nextSub)="true"
+    . i %UCASE(value)="FALSE"!(value=0) s @%json@(nextSub)="false"
+    i type="null" s @%json@(nextSub)="null"
+    i type="string" s @%json@(nextSub)=""""_value_""""
+    i type="number" s @%json@(nextSub)=value
+    i type="object" d stObj("json")
+    i type="list" d stList("json")
+    q
+    ;
+    ; add list element
+    ; available types are:
+    ;   bool
+    ;   null
+    ;   string
+    ;   number
+    ;   string
+    ;   number
+    ;
+addToList(%json,element,type) n curSub,nextSub
+    s curSub=$o(@%json@(""),-1)
+    i curSub="" d errMsg("Invalid start of document","","",%json) q ; must have a previous subscript
+    s nextSub=curSub+1
+    i @%json@(curSub)'="[" d
+    . s @%json@(nextSub)=","
+    . s nextSub=nextSub+1
+    i type="bool" d
+    . i $$FUNC^%UCASE(element)="TRUE"!(element=1) s @%json@(nextSub)="true"
+    . i $$FUNC^%UCASE(element)="FALSE"!(element=0) s @%json@(nextSub)="false"
+    i type="null" s @%json@(nextSub)="null"
+    i type="string" s @%json@(nextSub)=""""_element_""""
+    i type="number" s @%json@(nextSub)=element
+    q
+    ;
+    ; test encoding of data
+    ;
+testEnc
+    w "Testing JSON encoding "
+    ; simple list
+    k exp,json
+    d stList("json")
+    d addToList("json","one","string")
+    d addToList("json","two","string")
+    d addToList("json","three","string")
+    d addToList("json","false","bool")
+    d endList("json")
+    s exp(1)="["
+    s exp(2)="""one"""
+    s exp(3)=","
+    s exp(4)="""two"""
+    s exp(5)=","
+    s exp(6)="""three"""
+    s exp(7)=","
+    s exp(8)="false"
+    s exp(9)="]"
+    d testHelper
+    ;
+    ; simple object
+    k exp,json
+    d stObj("json")
+    d addMember("json","colour","blue","string")
+    d addMember("json","shape","square","string")
+    d addMember("json","size",2,"number")
+    d endObj("json")
+    s exp(1)="{"
+    s exp(2)="""colour"""
+    s exp(3)=":"
+    s exp(4)="""blue"""
+    s exp(5)=","
+    s exp(6)="""shape"""
+    s exp(7)=":"
+    s exp(8)="""square"""
+    s exp(9)=","
+    s exp(10)="""size"""
+    s exp(11)=":"
+    s exp(12)=2
+    s exp(13)="}"
+    d testHelper
+    ;
+    ; mixed lists and objects
+    k exp,json
+    d stObj("json")
+    d addMember("json","box","","object")
+    d addMember("json","width",2,"number")
+    d addMember("json","height",4,"number")
+    d addMember("json","depth",5,"number")
+    d addMember("json","colour","","list")
+    d addToList("json","red","string")
+    d addToList("json","blue","string")
+    d addToList("json","green","string")
+    d endList("json")
+    d endObj("json")
+    d endObj("json")
+    s exp(1)="{"
+    s exp(2)="""box"""
+    s exp(3)=":"
+    s exp(4)="{"
+    s exp(5)="""width"""
+    s exp(6)=":"
+    s exp(7)=2
+    s exp(8)=","
+    s exp(9)="""height"""
+    s exp(10)=":"
+    s exp(11)=4
+    s exp(12)=","
+    s exp(13)="""depth"""
+    s exp(14)=":"
+    s exp(15)=5
+    s exp(16)=","
+    s exp(17)="""colour"""
+    s exp(18)=":"
+    s exp(19)="["
+    s exp(20)="""red"""
+    s exp(21)=","
+    s exp(22)="""blue"""
+    s exp(23)=","
+    s exp(24)="""green"""
+    s exp(25)="]"
+    s exp(26)="}"
+    s exp(27)="}"
+    d testHelper
+    w !
+    q
+    ;
+    ; run all tests
+    ;
+testAll
+    d testDec
+    d testEnc
+    k
+    q
+ 
+ 
 

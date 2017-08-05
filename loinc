@@ -1,4 +1,185 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+loinc
+loinc  ;Routines to deal with loinc codes
+    ;
+    ;James Carthew 15Oct2001
+    ;
+load s fnm="import/loincdb.txt",s1=$c(9),d1="|"
+    o fnm:(readonly)
+    s indata=0
+    f  u fnm r line q:$ZEOF  d
+    . u $p
+    . i line["Clip Here for Data" s indata=1 q
+    . i indata d
+    . . s line=$tr(line,"""")
+    . . s loincNum=$p(line,s1)
+    . . s mod10=$p(loincNum,"-",2),code=$p(loincNum,"-")
+    . . i $$mod10(code)'=mod10 w "Error in code: ",code,"-",mod10," <=> ",$$mod10(code),!
+    . . ; parse required fields
+    . . s component=$p(line,s1,2)
+    . . s property=$p(line,s1,3)
+    . . s timeAspct=$p(line,s1,4)
+    . . s system=$p(line,s1,5)
+    . . s scaleTyp=$p(line,s1,6)
+    . . s methodTyp=$p(line,s1,7)
+    . . s relatNms=$p(line,s1,8) ; separated by "; "
+    . . s class=$p(line,s1,9)
+    . . s mapTo=$p(line,s1,20)
+    . . s relNames2=$p(line,s1,58)
+    . . s shortName=$p(line,s1,59)
+    . . ;
+    . . ;w "short name = ",shortName,!
+    . . ;w "class = ",class,!
+    . . ;w "mapTo = ",mapTo,!
+    . . ;w relatNms,!
+    . . ;w relNames2,!
+    . . ;w "<return>" r ans w !,!
+    . . ;i ans="*" h
+    . . ; store the data
+    . . s ^loinc(loincNum)=component_d1_property_d1_timeAspct_d1_system_d1_scaleTyp_d1_methodTyp_d1_mapTo
+    . . s ^ltables(1,component)=""
+    . . s ^lxref(component,loincNum)=component
+    . . f i=1:1  s syn=$p(relatNms,";",i) q:syn=""  d
+    . . . i $e(syn)=" " s syn=$e(syn,2,$l(syn))
+    . . . s ^lxref(syn,loincNum)=component
+    . . f i=1:1  s syn=$p(relNames2,"; ",i) q:syn=""  d
+    . . . i $e(syn)=" " s syn=$e(syn,2,$l(syn))
+    . . . s ^lxref(syn,loincNum)=component
+    c fnm
+    ;
+    s fnm="import/table4.csv"
+    o fnm:(readonly)
+    u fnm r line  ;skip headings
+    f  u fnm r line q:$ZEOF  d
+    . u $p
+    . s line=$tr(line,"""")
+    . s ^ltables(2,$p(line,","))=$p(line,",",2)
+    c fnm
+    ;
+    s fnm="import/table5.csv"
+    o fnm:(readonly)
+    u fnm r line  ;skip headings
+    f  u fnm r line q:$ZEOF  d
+    . u $p
+    . s line=$tr(line,"""")
+    . s ^ltables(3,$p(line,","))=$p(line,",",2)
+    c fnm
+    ;
+    s fnm="import/table6.csv"
+    o fnm:(readonly)
+    u fnm r line  ;skip headings
+    f  u fnm r line q:$ZEOF  d
+    . u $p
+    . s line=$tr(line,"""")
+    . s ^ltables(3,$p(line,","))=$p(line,",",2)
+    c fnm
+    ;
+    s fnm="import/table7.csv"
+    o fnm:(readonly)
+    u fnm r line  ;skip headings
+    f  u fnm r line q:$ZEOF  d
+    . u $p
+    . s line=$tr(line,"""")
+    . s ^ltables(4,$p(line,",",2))=$p(line,",")_d1_$p(line,",",3)
+    c fnm
+    ;
+    s fnm="import/table8.csv"
+    o fnm:(readonly)
+    u fnm r line  ;skip headings
+    f  u fnm r line q:$ZEOF  d
+    . u $p
+    . s line=$tr(line,"""")
+    . s ^ltables(5,$p(line,","))=$p(line,",",2)
+    c fnm
+    ;
+    s fnm="import/table9.csv"
+    o fnm:(readonly)
+    u fnm r line  ;skip headings
+    f  u fnm r line q:$ZEOF  d
+    . u $p
+    . s line=$tr(line,"""")
+    . s ^ltables(6,$p(line,","))=$p(line,",",2)
+    c fnm
+    ;
+    s fnm="import/table10.csv"
+    o fnm:(readonly)
+    u fnm r line  ;skip headings
+    f  u fnm r line q:$ZEOF  d
+    . u $p
+    . s line=$tr(line,"""")
+    . s ^ltables(7,$p(line,","))=$p(line,",",2)
+    c fnm
+    ;
+    s fnm="import/table11.csv"
+    o fnm:(readonly)
+    u fnm r line  ;skip headings
+    f  u fnm r line q:$ZEOF  d
+    . u $p
+    . s line=$tr(line,"""")
+    . s ^ltables(8,$p(line,","))=$p(line,",",2)
+    c fnm
+    ;
+    s fnm="import/table12.csv"
+    o fnm:(readonly)
+    u fnm r line  ;skip headings
+    f  u fnm r line q:$ZEOF  d
+    . u $p
+    . k data
+    . d excsv(line,"data")
+    . s ^ltables(9,data(2))=data(1)_d1_data(2)
+    c fnm
+    ;
+    s fnm="import/table13.csv"
+    o fnm:(readonly)
+    u fnm r line  ;skip headings
+    f  u fnm r line q:$ZEOF  d
+    . u $p
+    . k data
+    . d excsv(line,"data")
+    . s ^ltables(10,data(2))=data(1)_d1_data(2)
+    c fnm
+    q
+    ;
+    ;
+mod10(num) n i,odd,even,sum
+    s odd=""
+    f i=$l(num):-2:1 s odd=odd_$e(num,i)
+    s odd=odd*2,even=""
+    f i=$l(num)-1:-2:1 s even=even_$e(num,i)
+    s even=even_odd,sum=0
+    f i=1:1:$l(even) s sum=sum+$e(even,i)
+    s i=(sum+9)\10*10
+    q i-sum
+    ;
+    ; look up xref - crude form for testing
+    ;
+luxref w "Look for: " r ans w !,!
+    i ans="" q
+    s code=""
+    f  s code=$o(^lxref(ans,code)) q:code=""  d
+    . w code,?10,^loinc(code),!
+    q
+    ;
+    ; extract csv line
+    ;
+    ; line is the raw data line
+    ; data is name of an array that will receive the extracted data.
+    ; data is accessed using indirection
+    ;
+excsv(line,dataArray) n inQuotes,pos,field,fdata,ch
+    s line=$tr(line,$c(13)_$c(10),"")
+    s inQuotes=0,field=1,fdata=""
+    f pos=1:1:$l(line) d
+    . s ch=$e(line,pos)
+    . i 'inQuotes,ch="""" s inQuotes=1 q
+    . i inQuotes,ch="""",$e(line,pos+1)'="""" s inQuotes=0 q
+    . i ch=",",'inQuotes d  q
+    . . s @dataArray@(field)=fdata
+    . . s fdata=""
+    . . s field=field+1
+    . s fdata=fdata_ch
+    s @dataArray@(field)=fdata  ;pick up the last field
+    q
+ 
 

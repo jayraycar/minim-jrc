@@ -1,4 +1,108 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+ldMBS
+ldMBS(fname,effDate) ;load the MBS item data from an xml file
+    ;2 Jun 2016
+    n quit,line,value,hdg,itemData,descr,itemNum
+    o fname:(readonly)
+    i '$T w "Cannot open "_fname q
+    s effDate=$$cnvDate(effDate)
+    s quit=0
+    u fname
+    f  d  q:quit
+    . r line
+    . i $zeof s quit=1 q
+    . i $e(line,1,5)="<?xml" q ; skip heading
+    . i $e(line,1,2)="<!" q    ; skip comments
+    . s hdg=$p($p(line,"<",2),">",1)
+    . s value=$p($p(line,">",2),"<",1)
+    . i hdg="Data" d
+    . . k itemData
+    . i hdg="/Data" d
+    . . m ^items("MBS",effDate,itemNum)=itemData
+    . i hdg="ItemNum" s itemNum=value
+    . i hdg="ItemStartDate" s $p(itemData,"|",1)=$$cnvDate(value)
+    . i hdg="ItemEndDate" s $p(itemData,"|",2)=$$cnvDate(value)
+    . i hdg="Category" s $p(itemData,"|",3)=value
+    . i hdg="Group" s $p(itemData,"|",4)=value
+    . i hdg="SubGroup" s $p(itemData,"|",5)=value
+    . i hdg="SubHeading" s $p(itemData,"|",6)=value
+    . i hdg="ItemType" s $p(itemData,"|",7)=value
+    . i hdg="FeeType" s $p(itemData,"|",8)=value
+    . i hdg="ProviderType" s $p(itemData,"|",9)=value
+    . i hdg="NewItem" s $p(itemData,"|",10)=value
+    . i hdg="ItemChange" s $p(itemData,"|",11)=value
+    . i hdg="AnaesChange" s $p(itemData,"|",12)=value
+    . i hdg="DescriptorChange" s $p(itemData,"|",13)=value
+    . i hdg="FeeChange" s $p(itemData,"|",14)=value
+    . i hdg="EMSNChange" s $p(itemData,"|",15)=value
+    . i hdg="EMSNCap" s $p(itemData,"|",16)=value
+    . i hdg="BenefitType" s $p(itemData("FEE"),"|",1)=value
+    . i hdg="BenefitStartDate" s $p(itemData("FEE"),"|",2)=$$cnvDate(value)
+    . i hdg="FeeStartDate" s $p(itemData("FEE"),"|",3)=$$cnvDate(value)
+    . i hdg="ScheduleFee" s $p(itemData("FEE"),"|",4)=value
+    . i hdg="Benefit75" s $p(itemData("FEE"),"|",5)=value
+    . i hdg="Benefit85" s $p(itemData("FEE"),"|",6)=value
+    . i hdg="BasicUnits" s $p(itemData("FEE"),"|",7)=value
+    . i hdg="EMSNStartDate" s $p(itemData("EMSN"),"|",1)=$$cnvDate(value)
+    . i hdg="EMSNEndDate" s $p(itemData("EMSN"),"|",2)=$$cnvDate(value)
+    . i hdg="EMSNFixedCapAmount" s $p(itemData("EMSN"),"|",3)=value
+    . i hdg="EMSNMaximumCap" s $p(itemData("EMSN"),"|",4)=value
+    . i hdg="EMSNPercentageCap" s $p(itemData("EMSN"),"|",5)=value
+    . i hdg="EMSNChangeDate" s $p(itemData("EMSN"),"|",6)=value
+    . i hdg="EMSNDescripion" d
+    . . k descr
+    . . d wrapText("descr",value)
+    . . m itemData("EMSN")=descr
+    . i hdg="Anaes" s $p(itemData,"|",17)=value
+    . i hdg="DescriptionStartDate" s itemData("DESCR",0)=$$cnvDate(value)
+    . i hdg="Description" d
+    . . k descr
+    . . d wrapText("descr",value)
+    . . m itemData("DESCR")=descr
+    . . s value=$$FUNC^%UCASE(value)
+    . . i $f(value,"(ANAES.)") s itemData("ANNOT","Anaes.")=""
+    . . i $f(value,"(ASSIST.)") s itemData("ANNOT","Assist.")=""
+    . . i $f(value,"(R)") s itemData("ANNOT","R")=""
+    . . i $f(value,"(K)") s itemData("ANNOT","K")=""
+    . . i $f(value,"(NK)") s itemData("ANNOT","NK")=""
+    . . i $f(value,"(H)") s itemData("ANNOT","H")=""
+    . . i $f(value,"(NR)") s itemData("ANNOT","NR")=""
+    . . i $f(value,"(CONTRAST)") s itemData("ANNOT","Contrast")=""
+    . i hdg="QFEStartDate" s $p(itemData("QFE"),"|",1)=$$cnvDate(value)
+    . i hdg="QFEEndDate" s $p(itemData("QFE"),"|",2)=$$cnvDate(value)
+    c fname
+    q
+    ;
+    ; date conversion
+    ;
+cnvDate(in)
+    n d,m,y
+    i in="" q ""
+    s in=$tr(in,".","/")
+    s d=$p(in,"/",1)
+    s m=$p(in,"/",2)
+    s y=$p(in,"/",3)
+    q $$FUNC^%DATE(m_"/"_d_"/"_y)
+    ;
+    ; wrapText at word nearest to 80 characters long
+    ;
+wrapText(array,text)
+    n quit,space,cnt,found,pos
+    s text=$tr(text,$c(146)_$c(151)_$c(150),"'--")
+    s quit=0
+    s cnt=1
+    f  d  q:quit
+    . i $l(text)'>80 d
+    . . s @array@(cnt)=text
+    . . s quit=1
+    . e  d
+    . . s found=0
+    . . f pos=80:-1:1 d  q:found
+    . . . i $e(text,pos)=" " s found=1
+    . . s @array@(cnt)=$e(text,1,pos-1)
+    . . s text=$e(text,pos+1,$l(text))
+    . s cnt=cnt+1
+    q
+ 
 

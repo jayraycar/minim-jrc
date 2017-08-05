@@ -1,4 +1,65 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+chkDate
+chkDate(date) ;check the format of a date and convert it to yyyy-mm-dd
+    ;return "" if not a date
+    ;  acceptable formats are:
+    ;       yyyy-mm-dd
+    ;       dd/mm/yyyy
+    ;       dd mmm yyyy
+    ;  allowable separators are:
+    ;       "-./ "
+    ;  James Carthew 11 Feb 2009
+    ;
+    n sep,a,b,c,i,month
+    ;determine separator
+    s sep="-"
+    i date["." s sep="."
+    i date["/" s sep="/"
+    i date[" " s sep=" "
+    ;set up month map
+    f i=1:1:12 s month($p("jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec",",",i))=i
+    s a=$p(date,sep),b=$p(date,sep,2),c=$p(date,sep,3)
+    s date=""
+    ;ensure month is numeric
+    i $l(b)=3 s b=$g(month($$FUNC^%LCASE(b)))
+    ;year is in a, therefore b=month, c=day
+    i a>1000 d
+    . i $l(b)=1 s b="0"_b
+    . i $l(c)=1 s c="0"_c
+    . s date=a_"-"_b_"-"_c
+    ;year is in c, therefore a=day, b=month
+    i c>1000 d
+    . i $l(b)=1 s b="0"_b
+    . i $l(a)=1 s a="0"_a
+    . s date=c_"-"_b_"-"_a
+    i b=""!(b>12) s date=""  ;invalid month
+    i $p(date,"-",3)>31 s date=""  ;invalid day
+    q date
+    ;
+    ;tester
+    ;
+test n date
+    w "Testing chkDate",!
+    s date=$$chkDate("2000-1-2")
+    i date="2000-01-02" w "."
+    e  w "E"
+    s date=$$chkDate("2/12/2000")
+    i date="2000-12-02" w "."
+    e  w "E"
+    s date=$$chkDate("2 Mar 2000")
+    i date="2000-03-02" w "."
+    e  w "E"
+    s date=$$chkDate("2/13/2000")
+    i date="" w "."
+    e  w "E"
+    s date=$$chkDate("33/12/2000")
+    i date="" w "."
+    e  w "E"
+    s date=$$chkDate("2000-01-02")
+    i date="2000-01-02" w "."
+    e  w "E"
+    w !
+    q
+ 
 

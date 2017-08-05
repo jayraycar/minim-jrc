@@ -1,4 +1,48 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+uuid
+uuid ;unique universal identifier creation routines
+    ;James Carthew 3 Feb 2009
+    ;
+    ; create uuid from time stamp, process number, machine identifier, and
+    ; memory available
+    ;
+1() n t,j,m,i,s
+    ;determine time stamp
+    s t=$h
+    s t=$p(t,",")*3600+$p(t,",",2)
+    s t=$$FUNC^%DH(t,8)
+    ;determine amount of memory used
+    s s=$$FUNC^%DH($ZUSEDSTOR,8)
+    ;determine process id
+    s j=$$FUNC^%DH($j,4)
+    ;determine machine identifier
+    s m=$g(^UTILITY("uuid","mac"))
+    i m="" d
+    . f i=1:1:6 s m=m_$$FUNC^%DH($r(256),2)
+    . s ^UTILITY("uuid","mac")=m
+    ;create output
+    w t,!,s,!,j,!,m,!
+    q t_"-"_$e(s,1,4)_"-"_$e(s,5,8)_"-"_j_"-"_m
+    ;
+    ; random uuid
+    ;
+4() n out,i
+    s out=""
+    f i=1:1:16 d
+    . s out=out_$$FUNC^%DH($r(256),2)
+    . i i=4!(i=6)!(i=8)!(i=10) s out=out_"-"
+    q out
+    ;
+    ; short uuid
+    ; for use when the regular uuid is too long or unnecessary
+    ; this is based on date in days since 31Dec1840,
+    ; time of day in seconds and the process id of the calling job
+    ;
+short() n out,value,i,temp
+    s value=$h_","_$j,out=""
+    f i=1:1:3 d
+    . i i>1 s out=out_"-"
+    . s out=out_$$base34^convert($p(value,",",i))
+    q out
 

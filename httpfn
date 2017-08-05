@@ -1,4 +1,236 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+httpfn
+httpfn  ;Common functions for web based interface
+  ;James Carthew 15 Nov 2003
+  ;
+  ; Login form
+  ;
+Lform s ^httpout($j,"TITLE")="Login"
+  s ^httpout($j,"HEADING")="Login"
+  s ^httpout($j,"CONTENT")="<form method='POST' action='Login' name='login'>"
+  s ^httpout($j,"CONTENT",1)="<table>"
+  s ^httpout($j,"CONTENT",2)="<tr>"
+  s ^httpout($j,"CONTENT",3)="<td align='right'>User:</td>"
+  s ^httpout($j,"CONTENT",4)="<td><input type='text' name='user' /></td>"
+  s ^httpout($j,"CONTENT",5)="</tr>"
+  s ^httpout($j,"CONTENT",6)="<tr>"
+  s ^httpout($j,"CONTENT",7)="<td align='right'>Password:</td>"
+  s ^httpout($j,"CONTENT",8)="<td><input type='password' name='passwd' /></td>"
+  s ^httpout($j,"CONTENT",9)="</tr>"
+  s ^httpout($j,"CONTENT",10)="<tr>"
+  s ^httpout($j,"CONTENT",11)="<td></td><td align='center'><input type='submit' name='logon' value='Logon' /></td>"
+  s ^httpout($j,"CONTENT",12)="</tr>"
+  s ^httpout($j,"CONTENT",13)="</table></form>"
+  s ^httpout($j,"ONLOAD")="onload='document.login.user.focus();'"
+  q
+  ;
+  ; System login
+  ; James Carthew 19 Dec 2003
+  ;
+Login n now,encrypt,pwd
+  ; verify login
+  s user=$tr(fld("user"),lower,upper)
+  s pwd=$$^FNGETPWD(user)
+  i pwd'=$p($g(^SEC(system,user)),d1,4)!(pwd="") d  q
+  . s ^httpout($j,"MESSAGE")="Invalid user or password"
+  . d Lform
+  ;to be done
+  ; setup session
+  s now=$h
+  s encrypt=$$en^crypt(now)
+  s ^session(user,now,"lastAct")=now
+  s ^session(user,now,"key")=$p(encrypt,"|",2)
+  u %ZNDev
+  w "HTTP/1.1 200 OK",!
+  w "Set-Cookie: user=",user,"; Version=""1""; Discard",!
+  w "Set-Cookie: ssnid=",$p(encrypt,"|"),"; Version=""1""; Discard",!
+  w "Content-type: text/html",!,!
+  d Home
+  q
+  ;
+  ; System logout
+  ;  James Carthew 20Dec2003
+  ;
+Logout k ^session(user,ssnid)
+  s ^httpout($j,"TITLE")="Logged out"
+  s ^httpout($j,"HEADING")="Logged out"
+  s ^httpout($j,"MENU")="<a href='/'>Login</a>"
+  q
+  ;
+  ; Home page
+  ;
+Home s ^httpout($j,"TITLE")="WebLab"
+  s ^httpout($j,"HEADING")="WebLab"
+  d Menu
+  q
+  ;
+  ; Top level menu form
+  ;
+Menu n i,j,auth,sec,menu,pgm
+  ; get state information
+  s sec=$p($g(^SEC(system,user)),d1)
+  i user'="",ssnid'="" d
+  . i $d(^session(user,ssnid,"menu")) d
+  .. s mensys=$p(^session(user,ssnid,"menu"),d1)
+  .. s menu=$p(^session(user,ssnid,"menu"),d1,2)
+  . e  d
+  .. s (mensys,menu)=system
+  .. s ^session(user,ssnid,"menu")=mensys_d1_menu
+  e  s (mensys,menu)=system
+  ;
+  ; act on option selected
+  i $g(fld("menopt"))'="" d
+  . s auth=$p(^MENU(mensys,menu,fld("menopt")),d1,2)
+  . i sec[auth s pgm=$p(^MENU(mensys,menu,fld("menopt")),d1,5)
+  . e  s pgm=""
+  . i pgm'="" d
+  .. i $e(pgm)="^" d
+  ... s mensys=$p($p(pgm,"^",2),cm),menu=$p(pgm,cm,2)
+  ... s ^httpout($j,"TITLE")=$p(^MENU(mensys,menu),d1)
+  ... s ^httpout($j,"HEADING")=$p(^MENU(mensys,menu),d1)
+  .. e  x pgm
+  ;
+  ; display menu
+  s ^httpout($j,"MENU")="<h3>"_$p(^MENU(mensys,menu),d1)_"</h3>"
+  s ^httpout($j,"MENU",1)="<a href='/'>Home</a><br />"
+  s ^httpout($j,"MENU",2)="<a href='Logout'>Logout</a><br />"
+  s ^httpout($j,"MENU",3)="<a href='Error'>Error List</a><br /><br />"
+  s i="",j=4
+  f  s i=$o(^MENU(mensys,menu,i)) q:i=""  d
+  . s auth=$p(^MENU(mensys,menu,i),d1,2)
+  . i sec[auth s ^httpout($j,"MENU",j)="<a href='Menu?menopt="_i_"'>"_i_". "_$p(^MENU(system,menu,i),d1)_"</a><br />"
+  . s j=j+1
+  ;
+  q
+  ;
+  ; Second level menu form
+  ;
+Submenu d Title^libhtml(fld("submenu"))
+  w "<h2>",fld("submenu"),"</h2>",!
+  w "<form method=POST action=form>",!
+  s i=""
+  f  s i=$o(^html(fld("submenu"),i)) q:i=""  d
+  . w "<input type=radio name=form value=",i,"> ",i,"<br>",!
+  w "<input type=hidden name=submenu value=",fld("submenu"),">",!
+  w "<br><input type=submit value=Select>",!
+  w "</form>"
+  d EndPage^libhtml
+  q
+  ;
+  ; update form contents into globals
+  ;
+Update s rtn=$g(^html(fld("submenu"),fld("form")))
+  i rtn'="" d @rtn q
+  d Title^libhtml("ERROR")
+  w "<h1>ERROR processing form:</h1><br>Form routine for",fld("form"),", has not been defined",!
+  d EndPage^libhtml
+  q
+  ;
+  ; test response to GET
+  ;
+TestGet  d Title^libhtml("Testing forms")
+  w "<h2>Testing forms, GET metod</h2>",!
+  w "<form method=POST action=test>",!
+  w "<table border>",!
+  w "<tr><td>Field 1</td><td><input type=text name=field1 size=10></td></tr>",!
+  w "<tr><td>Field 2</td><td><input type=password name=field2></td></tr>",!
+  w "<tr><td>Field 3</td><td><input type=checkbox name=field3 value=M ></td></tr>",!
+  w "<tr><td>Field 4</td><td><input type=radio name=field4 value=First></td></tr>",!
+  w "<tr><td>Field 4</td><td><input type=radio name=field4 value=Second></td></tr>",!
+  w "<tr><td>Field 5</td><td><select name=field5>",!
+  w "<option>First</option><option>Second</option><option>Third</option><option>Fourth</option>",!
+  w "</select></td></tr>",!
+  w "</table>",!
+  w "<input type=submit value=Send>",!
+  w "</form>",!
+  d EndPage^libhtml
+  q
+  ;
+  ; test response to POST
+  ;
+TestPost n i
+  d Title^libhtml("Form response")
+  w "Received POST request with the following data:<br /><br />",!
+  w "<table border>",!
+  w "<tr>",!
+  w "<td>Field Name</td>",!
+  w "<td>Value</td>",!
+  w "</tr>",!
+  s i=""
+  f  s i=$o(fld(i)) q:i=""  d
+  . w "<tr>",!
+  . w "<td>",i,"</td><td>",fld(i),"</td>",!
+  . w "</tr>",!
+  w "</table>",!
+  d EndPage^libhtml
+  q
+  ;
+  ; convert binary and <,>,& to &...;
+  ;
+escOutput(str) n pos,out
+  s out=""
+  f pos=1:1:$l(str) d
+  . i $e(str,pos)=">" s out=out_"&gt;" q
+  . i $e(str,pos)="<" s out=out_"&lt;" q
+  . i $e(str,pos)="&" s out=out_"&amp;" q
+  . i $e(str,pos)<" "!$e(str,pos)>126 s out=out_"&lt;"_$$FUNC^%DH($ascii($e(str,pos),2))_"&gt;" q
+  . s out=out_$e(str,pos)
+  q out
+  ;
+  ; Error listing
+  ;
+Error s ^httpout($j,"TITLE")="Error Listing"
+  d Menu
+  ;
+  ; default error enquiry form
+  ;
+  i '$d(fld("date")) d
+  . s ^httpout($j,"HEADING")="Error Listing"
+  . s ^httpout($j,"CONTENT")="<form method='POST' action='Error'>"
+  . s ^httpout($j,"CONTENT",1)="<input type='radio' name='type' value='Error' checked />Errors"
+  . s ^httpout($j,"CONTENT",2)="<input type='radio' name='type' value='Message' />Messages"
+  . s ^httpout($j,"CONTENT",3)="<input type='radio' name='type' value='All' />All<br />"
+  . s ^httpout($j,"CONTENT",4)="Select a date:<br /><br />"
+  . s DJ="",j=5
+  . f  s DJ=$o(^ERR(DJ),-1) q:DJ=""  d
+  .. d ADT^DAT
+  .. s ^httpout($j,"CONTENT",j)="<input type='submit' name='date' value="_DJ_" />"_ADT_"<br />"
+  .. s j=j+1
+  . ;s ^httpout($j,"CONTENT",j)="<input type='submit' name='show' value='Show' />",j=j+1
+  . s ^httpout($j,"CONTENT",j)="</form>"
+  ;
+  ; date selected, error not selected
+  ;
+  i $d(fld("date")),'$d(fld("rtime")) d
+  . s DJ=fld("date")
+  . d ADT^DAT
+  . s ^httpout($j,"HEADING")="Error Listing for "_ADT
+  . s ^httpout($j,"CONTENT")="<table border><tr><td><b>Time</b></td><td><b>Device</b></td><td><b>Program</b></td><td><b>Line</b></td><td><b>User</b></td><td><b>Message</b></td></tr>"
+  . s rtm="",j=1
+  . f  s rtm=$o(^ERR(DJ,rtm)) q:rtm=""  d
+  .. i $g(fld("type"))="Error",'$d(^ERR(DJ,rtm,"#")) q
+  .. i $g(fld("type"))="Message",$d(^ERR(DJ,rtm,"#")) q
+  .. s %TN=86400-rtm d ^%TO
+  .. s ^httpout($j,"CONTENT",j)="<tr>",j=j+1
+  .. s ^httpout($j,"CONTENT",j)="<td><a href='Error?date="_DJ_"&rtime="_rtm_"'>"_%TS_"</a></td>",j=j+1
+  .. f i=1:1:4 s ^httpout($j,"CONTENT",j)="<td>"_$$escOutput($p(^ERR(DJ,rtm),d1,i))_"</td>",j=j+1
+  .. s ^httpout($j,"CONTENT",j)="<td>"_$$escOutput(^ERR(DJ,rtm,1))_"</td>",j=j+1
+  .. s ^httpout($j,"CONTENT",j)="</tr>"
+  . s ^httpout($j,"CONTENT",j)="</table>"
+  ;
+  ; detail requested
+  ;
+  i $d(fld("date")),$d(fld("rtime")) d
+  . s DJ=fld("date") d ADT^DAT
+  . s %TN=86400-fld("rtime") d ^%TO
+  . s ^httpout($j,"HEADING")="Detailed Error Listing for "_ADT_" "_%TS
+  . s ^httpout($j,"CONTENT")="<table border><tr><td><b>Variable</b></td><td><b>Value</b></td></tr>"
+  . s i="",j=1
+  . f  s i=$o(^ERR(fld("date"),fld("rtime"),"#",i)) q:i=""  d
+  .. s ^httpout($j,"CONTENT",j)="<tr><td>"_i_"</td><td>"_$$escOutput(^ERR(fld("date"),fld("rtime"),"#",i))_"</td></tr>"
+  .. s j=j+1
+  . s ^httpout($j,"CONTENT",j)="</table>"
+  q
+ 
 

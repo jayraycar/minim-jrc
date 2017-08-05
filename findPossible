@@ -1,4 +1,45 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+findPossible
+findPossible(s,maxSize,cutoff)  ; find possible words from list of letters
+    ; 16 Aug 2010
+    ;
+    n w,x,res,sim,%dice,%sim
+    s w=""
+    f  s w=$o(^word(w)) q:w=""  d
+    . i $l(w)>maxSize q
+    . s sim=$fn($$unigram(s,w),"",3)
+    . i sim>cutoff s res(sim,w)=""
+    zw res
+    q
+    ;
+    ; unigram comparison with subset check
+    ;
+unigram(s1,s2) n list,ch,sum1,sum2,union,isect,i,%lower,%upper,invalid
+    i s1=""!(s2="") q 0
+    s s1=$zucase(s1),s2=$zucase(s2)
+    ;build list
+    f i=1:1:$l(s1) d
+    . s ch=$e(s1,i)
+    . s list(ch,1)=$g(list(ch,1))+1
+    f i=1:1:$l(s2) d
+    . s ch=$e(s2,i)
+    . s list(ch,2)=$g(list(ch,2))+1
+    ; check for invalid letters relative to S1
+    ; S2 must be a subset of the letters found in S1
+    s ch="",invalid=0
+    f  s ch=$o(list(ch)) q:ch=""  d
+    . i $g(list(ch,2))>$g(list(ch,1)) s invalid=1  ;too many of a letter
+    i invalid q 0
+    ; calculate similarity index
+    s ch="",(sum1,sum2,isect,union)=0
+    f  s ch=$o(list(ch)) q:ch=""  d
+    . s sum1=sum1+$g(list(ch,1))
+    . s sum2=sum2+$g(list(ch,2))
+    . i $g(list(ch,1))'<$g(list(ch,2)) s union=union+list(ch,1)
+    . e  s union=union+$g(list(ch,2))
+    . i $g(list(ch,1))'>$g(list(ch,2)) s isect=isect+$g(list(ch,1))
+    . e  s isect=isect+$g(list(ch,2))
+    s %sim=isect/union
+    q %sim
 

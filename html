@@ -1,4 +1,407 @@
-Version control ; ~Format=ANSI.S~
-%RO 2017-08-05 22:39
-
+ ; ~Format=ANSI.S~
+%RO Version Control
+html
+html ;library of common routines for use in html forms [ 12/19/2002  3:46 PM ]
+    ; James Carthew 21Sep2001
+    ;
+    ; add http heading
+    ;
+start(hdg)
+    k ^httpout($j)
+    s ^httpout($j,"C",1)="<html>"
+    s ^httpout($j,"C",2)="<head><title>"_hdg_"</title></head>"
+    s ^httpout($j,"C",3)="<body><h1>"_hdg_"</h1>"
+    q
+    ;
+    ; end http tags
+    ;
+end n next
+    s next=$o(^httpout($j,"C",""),-1)+1
+    s ^httpout($j,"C",next)="</body></html>"
+    q
+    ;
+    ; add header
+    ;
+addh(name,value) n seq
+    s seq=$o(^httpout($j,"H",""),-1)+1
+    s ^httpout($j,"H",seq)=name_%s1_value
+    q
+    ;
+    ; add title and header
+    ;
+addt(line) s ^httpout($j,"TITLE")=line
+    s ^httpout($j,"HEADER")=line
+    q
+    ;
+    ; add a message to ^httpout
+    ;
+addm(line) i '$d(^httpout($j,"MESSAGE")) s ^httpout($j,"MESSAGE")=line
+    e  s ^httpout($j,"MESSAGE")=^httpout($j,"MESSAGE")_"<br />"_line
+    q
+    ;
+    ; add content lines to ^httpout
+    ;
+addc(line) n next
+    ;i '$d(^httpout($j,"C")) s ^httpout($j,"C")=line q
+    s next=$o(^httpout($j,"C",""),-1)+1
+    s ^httpout($j,"C",next)=line
+    q
+    ;
+    ; add onload javascript
+    ;
+addo(script) i script'="" s ^httpout($j,"ONLOAD")="onload="""_script_";"""
+    e  s ^httpout($j,"ONLOAD")=""
+    q
+    ;
+    ; add breadcrumbs
+    ;   bc is an array, accessed via indirection
+    ;
+addb(bc) n i
+    s ^httpout($j,"BC",1)="<a href=""/logoff"">Log Off</a>"
+    s i=""
+    f  s i=$o(@bc@(i)) q:i=""  d
+    . s ^httpout($j,"BC",i+1)=" > "_@bc@(i)
+    q
+    ;
+    ; convert hexadecimal character representation to a decimal represenation
+    ; function
+    ;
+HD(str) n pos,len,hexnum,dec
+    s str=$zucase(str)
+    s len=$l(str)
+    i len=0 q ""
+    i len>2 q ""
+    i len=1 s str="0"_str
+    s hexnum="0123456789ABCDEF"
+    s dec=$f(hexnum,$e(str,1))-2*16+$f(hexnum,$e(str,2))-2
+    q dec
+    ;
+    ; convert html "%" encoding to a character
+    ;  call using dot notation for str
+    ;  convert "+" to a space
+    ;
+Hex(str) n pos,dec
+    i str="" q
+    s pos=1
+    f  d  q:'pos
+    . s pos=$f(str,"+")
+    . i pos=0 q
+    . s $e(str,pos-1)=" "
+    f pos=1:1:$l(str) d
+    . i $e(str,pos)'="%" q
+    . s dec=$$HD($e(str,pos+1,pos+2))
+    . s str=$e(str,1,pos-1)_$c(dec)_$e(str,pos+3,$l(str))
+    q
+    ;
+    ; function version of Hex
+    ;
+decHex(str) n pos,dec,outstr,ch
+    s outstr=""
+    s pos=1
+    f pos=1:1:$l(str) d
+    . s ch=$e(str,pos)
+    . i ch="+" s ch=" "
+    . e  i ch="%" d
+    . . s dec=$$HD($e(str,pos+1,pos+2))
+    . . s ch=$c(dec)
+    . . s pos=pos+2
+    . s outstr=outstr_ch
+    q outstr
+    ;
+    ; escape special characters
+    ;
+escape(str) n i,outstr
+    s outstr=""
+    f i=1:1:$l(str) d
+    . i $e(str,i)="<" s outstr=outstr_"&lt;"
+    . e  i $e(str,i)=">" s outstr=outstr_"&gt;"
+    . e  i $e(str,i)="&" s outstr=outstr_"&amp;"
+    . e  i $e(str,i)="""" s outstr=outstr_"&quot;"
+    . e  i $e(str,i)="'" s outstr=outstr_"&apos;"
+    . e  i $a($e(str,i))>126 s outstr=outstr_"%"_$zconvert($e(str,i),"O","SHEX")
+    . e  i $a($e(str,i))<32 s outstr=outstr_"%"_$zconvert($e(str,i),"O","SHEX")
+    . e  s outstr=outstr_$e(str,i)
+    q outstr
+    ;
+    ;********************************************
+    ; widget creating routines that use ^httpout
+    ;********************************************
+    ;
+    ; start a web page form
+    ;
+form(name,action) d addc("<form name='"_name_"' action='"_action_"' method='post'>")
+    d addc("<table>")
+    q
+    ;
+    ; end a web page form
+    ;
+formEnd d addc("</table></form>") q
+    ;
+    ; text input field
+    ;
+    ;textIn(prompt,name,value,max,size) i $g(size)="" s size=max+1+(max\6)
+    ; d addc("<tr>")
+    ; d addc("<td class=""prompt"">"_prompt_":</td>")
+    ; d addc("<td><input type=""text"" name="""_name_""" value="""_value_""" maxlength="""_max_""" size="""_size_""" /></td>")
+    ; d addc("</tr>")
+    ; q
+    ;
+    ; text input widget
+    ;
+txtInp(prompt,name,value,max) n str
+    d addc("<tr><td class='prompt'>"_prompt_":</td>")
+    s str="<td><input type=""text"" name="""_name_""""
+    i $d(value) s str=str_" value="""_$$escape(value)_""""
+    i $d(max) s str=str_" maxlength="""_max_""" size="""_(max+1)_""""
+    s str=str_" /></td>"
+    d addc(str)
+    d addc("</tr>")
+    q
+    ;
+    ; with short help
+    ;
+textInS(prompt,name,value,max,size,help) ;i $g(size)="" s size=max+1+(max\6)
+    i $g(size)="" s size=max
+    d addc("<tr>")
+    d addc("<td class=""prompt"">"_prompt_":</td>")
+    d addc("<td><input type=""text"" name="""_name_""" value="""_value_""" maxlength="""_max_""" size="""_size_""" /></td></tr>")
+    d addc("<tr><td></td><td>"_help_"</td></tr>")
+    q
+    ;
+    ; password input field
+    ;
+    ;passwdIn(prompt,name,max) d addc("<tr>")
+    ; d addc("<td class=""prompt"">"_prompt_":</td>")
+    ; d addc("<td><input type=""password"" name="""_name_""" maxlength="""_max_""" size="""_(max+1)_""" /></td>")
+    ; d addc("</tr>")
+    ; q
+    ;
+    ; password input widget
+    ;
+pwdInp(prompt,name,max) n str
+    d addc("<tr><td class='prompt'>"_prompt_":</td>")
+    s str="<td><input type=""password"" name="""_name_""""
+    i $d(max) s str=str_" maxlength="""_max_""" size="""_(max+1)_""""
+    s str=str_" /></td>"
+    d addc(str)
+    d addc("</tr>")
+    q
+    ;
+    ; textarea input field
+    ;
+    ;textArea(prompt,name,value,size) d addc("<tr>")
+    ; d addc("<td class=""prompt"">"_prompt_":</td>")
+    ; d addc("<td><textarea name="""_name_""" rows="""_$p(size,cm)_""" cols="""_$p(size,cm,2)_""">")
+    ; d addc(value)
+    ; d addc("</textarea></td>")
+    ; d addc("</tr>")
+    ; q
+    ;
+    ; text area input widget
+    ;
+taInp(prompt,name,rows,cols,value) n str
+    d addc("<tr><td class='prompt'>"_prompt_":</td>")
+    d addc("<td>")
+    s str="<textarea name='"_name_"' rows='"_rows_"' cols='"_cols_"'>"_value_"</textarea>"
+    d addc(str)
+    d addc("</td>")
+    d addc("</tr>")
+    q
+    ;
+    ; radio input field widget
+    ;   prompt = prompt for the field
+    ;   name = name of the field
+    ;   value = current value of field
+    ;   table = the name of an array
+    ;     the array must be structured as:
+    ;       arrayName(id)=value
+    ;
+    ;
+radio(prompt,name,value,table) n sub,inStr
+    d addc("<tr>")
+    d addc("<td class=""prompt"">"_prompt_":</td>")
+    d addc("<td>")
+    d addc("<table")
+    s sub=""
+    f  s sub=$o(@table@(sub)) q:sub=""  d
+    . d addc("<tr>")
+    . d addc("<td>")
+    . s inStr="<input type=""radio"" name="""_name_""" value="""_sub_""""
+    . i sub=value s inStr=inStr_" checked"
+    . s inStr=inStr_" />"
+    . d addc(inStr)
+    . d addc("</td>")
+    . d addc("<td>")
+    . d addc(sub)
+    . d addc("</td>")
+    . d addc("<td>")
+    . d addc(@table@(sub))
+    . d addc("</td>")
+    d addc("</table>")
+    d addc("</td>")
+    d addc("</tr>")
+    q
+    ;
+    ; display only field
+    ;
+    ;display(prompt,value) d addc("<tr>")
+    ; d addc("<td class=""prompt"">"_prompt_":</td>")
+    ; d addc("<td>"_value_"</td>")
+    ; d addc("</tr>")
+    ; q
+    ;
+    ; display only field
+    ;
+txtDisp(prompt,value) d addc("<tr><td class='prompt'><b>"_prompt_":</b></td>")
+    d addc("<td>"_value_"</td></tr>")
+    q
+    ;
+    ; hidden field
+    ;
+    ;hidden(name,value) d addc("<input type=""hidden"" name="""_name_""" value="""_value_""" />")
+    ; q
+    ;
+    ; hidden input widget
+    ; designed to be used at the bottom of a form outside of tables
+    ; but before the </form> tag.
+    ;
+hidInp(name,value) d addc("<input type='hidden' name="""_name_""" value="""_value_""" />")
+    q
+    ;
+    ; checkbox widget
+    ;   prompt = prompt
+    ;   name = variable name
+    ;   table = array containing list of all values
+    ;     table(value)=0|1  ; 0 = not checked, 1 = checked
+    ;
+chkBoxInp(prompt,name,table) n sub,inStr
+    d addc("<tr>")
+    d addc("<td class=""prompt"">"_prompt_":</td>")
+    d addc("<td>")
+    d addc("<table>")
+    s sub=""
+    f  s sub=$o(@table@(sub)) q:sub=""  d
+    . d addc("<tr>")
+    . d addc("<td>")
+    . s inStr="<input type=""checkbox"" name="""_name_""" value="""_sub_""""
+    . i @table@(sub) s inStr=inStr_" checked"
+    . s inStr=inStr_" />"
+    . d addc(inStr)
+    . d addc("</td>")
+    . d addc("<td>")
+    . d addc(sub)
+    . d addc("</td>")
+    d addc("</table>")
+    d addc("</td>")
+    d addc("</tr>")
+    q
+    ;
+    ; select list input
+    ;   simple, single selection
+    ;   prompt = prompt for the field
+    ;   name = name of the field
+    ;   value = current value of field
+    ;   table = the name of an array
+    ;     the array must be structured as:
+    ;       arrayName(value)="display name"
+    ;
+selInp(prompt,name,value,table) n sub,inStr
+    d addc("<tr>")
+    d addc("<td class=""prompt"">"_prompt_":</td>")
+    d addc("<td>")
+    d addc("<select name='"_name_"'>")
+    s sub=""
+    f  s sub=$o(@table@(sub)) q:sub=""  d
+    . s inStr="<option value='"_sub_"'"
+    . i sub=value s inStr=inStr_" checked"
+    . s inStr=inStr_">"
+    . d addc(inStr)
+    . d addc(@table@(sub))
+    . d addc("</option>")
+    d addc("</select>")
+    d addc("</td>")
+    d addc("</tr>")
+    q
+    ;
+    ; submit buttons
+    ;
+    ;submit(grp) d addc("<tr>")
+    ; d addc("<td colspan=""2"" align=""center"">")
+    ; i grp["n" d addc("<input type=""submit"" name=""clicked"" value=""Next"" />")
+    ; i grp["s" d addc("<input type=""submit"" name=""clicked"" value=""Send"" />")
+    ; i grp["p" d addc("<input type=""submit"" name=""clicked"" value=""Previous"" />")
+    ; i grp["f" d addc("<input type=""submit"" name=""clicked"" value=""File"" />")
+    ; i grp["r" d addc("<input type=""submit"" name=""clicked"" value=""Remove"" />")
+    ; i grp["u" d addc("<input type=""submit"" name=""clicked"" value=""Submit"" />")
+    ; i grp["a" d addc("<input type=""submit"" name=""clicked"" value=""Abort"" />")
+    ; i grp["i" d addc("<input type=""submit"" name=""clicked"" value=""In Use"" />")
+    ; i grp["v" d addc("<input type=""submit"" name=""clicked"" value=""Available"" />")
+    ; i grp["l" d addc("<input type=""submit"" name=""clicked"" value=""Logon"" />")
+    ; d addc("</td>")
+    ; d addc("</tr>")
+    ; q
+    ;
+    ; submit buttons widget
+    ;
+subBtn(grp) d addc("<tr><td colspan=""2"" align=""center"">")
+    i grp["n" d addc("<input type=""submit"" name=""next"" value=""Next"" />")
+    i grp["s" d addc("<input type=""submit"" name=""send"" value=""Send"" />")
+    i grp["p" d addc("<input type=""submit"" name=""prev"" value=""Previous"" />")
+    i grp["f" d addc("<input type=""submit"" name=""file"" value=""File"" />")
+    i grp["a" d addc("<input type=""submit"" name=""abort"" value=""Abort"" />")
+    i grp["u" d addc("<input type=""submit"" name=""submit"" value=""Submit"" />")
+    i grp["d" d addc("<input type=""submit"" name=""delete"" value=""Delete"" />")
+    i grp["c" d addc("<input type=""reset"" name=""clear"" value=""Clear"" />")
+    i grp["r" d addc("<input type=""submit"" name=""search"" value=""Search"" />")
+    i grp["v" d addc("<input type=""submit"" name=""listAvail"" value=""Available"" />")
+    i grp["i" d addc("<input type=""submit"" name=""listInUse"" value=""In Use"" />")
+    i grp["l" d addc("<input type=""submit"" name=""clicked"" value=""Logon"" />")
+    d addc("</td></tr>")
+    q
+    ;
+    ; edit widget
+    ;
+edit(curScrn,prompt,itype,value) n href,line
+    d addc("<tr><td class='prompt'>"_prompt_":</td>")
+    ; set up edit hyperlink
+    s href="<a href='webform?curScrn="_curScrn_"'>Edit</a>"
+    d addc("<td>"_href_"</td>")
+    ; display value according to input type
+    d addc("<td>")
+    i itype="textarea" d
+    . s value=$tr(value,$c(10),"")  ;remove line feed
+    . f line=1:1:$l(value,$c(13)) d addc($p(value,$c(13),line)_"<br />")
+    e  d addc(value)
+    d addc("<td></tr>")
+    q
+    ;
+    ; final edit
+    ;
+    ;edit(prompt,fld,value) d addc("<tr>")
+    ;    d addc("<td class=""prompt"">"_prompt_":</td>")
+    ;    d addc("<td><a href=""webform?curFld="_fld_""">Edit</a></td>")
+    ;    d addc("<td>"_value_"</td>")
+    ;    d addc("</tr>")
+    ;    q
+    ;
+    ;
+Err(Title,Msg) n buf
+    ;s buf="HTTP/1.1 404 NOT FOUND"_$c(13,10)
+    s buf="<html><head><title>"_Title_"</title></head>"
+    s buf=buf_"<body bgcolor=""#99CCCC"">"
+    s buf=buf_"<h2><font color=red>"_Title_" - ERROR</font></h2>"
+    s buf=buf_Msg
+    s buf=buf_"</body></html>"
+    w buf,!
+    q
+    ;
+    ; Remove illegal characters
+    ;
+RemIll(illchar) s illchar="\"_illchar
+    s field=""
+    f  s field=$o(CONT(field)) q:field=""  d
+    . i field'?1.N q
+    . s CONT(field)=$tr(CONT(field),illchar,"")
+    q
+ 
 
