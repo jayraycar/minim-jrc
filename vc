@@ -1,11 +1,13 @@
  ; ~Format=ANSI.S~
-%RO Version Control
+%RO 2017-08-25 22:32
 vc
 vc  ; Interface to external version control
     ;
     q
     ;
     ; Export all routines in ^ROUTINE to version control subdirectory
+    ;
+    ; TODO: delete routine, add new routine
     ;
 export
     w "Exporting routines for version control...",!
@@ -28,5 +30,34 @@ export
     . u io
     . c dev
     q
+    ;
+    ; Import all routines from the version control subdirectory
+    ;
+importAll
+    w "Importing routines from version control...",!
+    s dir="c:\minimDat\"_$znspace_"\"
+    ; get the list of files in the version control directory
+    s dev="|PIPE|dir /b "_dir
+    o dev:("rt")
+    n $et="g endDir"
+    u dev
+    f  r fname d
+    . d importOne(dir,fname)
+endDir
+    s $et=""
+    c dev
+    u $p
+    q
+    ;
+    ; import a routine from version control
+    ;
+importOne(dir,fname) n fullPath,list
+    s fullPath=dir_fname
+    s list=""
+    d import^%RI(fullPath,list)
+    q
+    
  
+
+
 
