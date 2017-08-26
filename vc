@@ -1,6 +1,5 @@
  ; ~Format=ANSI.S~
-%RO 2017-08-25 22:32
-vc
+%RO Version Control
 vc  ; Interface to external version control
     ;
     q
@@ -15,25 +14,35 @@ export
     s rnm=""
     f  s rnm=$o(^ROUTINE(rnm)) q:rnm=""  d
     . w rnm,!
-    . s expFnm=dir_rnm
-    . s io=$io
-    . s dev="|FILE|"_expFnm o dev:("wtn"):1 e  u io d  q
-    . . i show w "Failed to use ",expFnm,!
-    . u dev
-    . w " ; ~Format=ANSI.S~",!
-    . w "%RO Version Control",!
-    . ; write all routines line-by-line using ANSI format
-    . s n=0
-    . w rnm,!
-    . s line=0 f  s line=$o(^ROUTINE(rnm,line)) q:+line'=line  s s=^ROUTINE(rnm,line) s:s="" s=" " w s,!
-    . w ! ; end of routine
-    . u io
-    . c dev
+    . d exportOne(dir,rnm)
+    q
+    ;
+    ; export just one program
+    ;
+exportOne(dir,rname,fname="") n expFnm,io,dev,line,s
+    i $e(dir,$l(dir))'="\" s dir=dir_"\"
+    i fname="" s expFnm=dir_rname
+    e  s expFnm=dir_fname
+    s io=$io
+    s dev="|FILE|"_expFnm o dev:("wtn"):1 e  u io d  q
+    . w "Failed to use ",expFnm,!
+    u dev
+    w " ; ~Format=ANSI.S~",!
+    w "%RO Version Control",!
+    ; write all routines line-by-line using ANSI format
+    s line=0
+    f  s line=$o(^ROUTINE(rname,line)) q:line=""  d
+    . s s=^ROUTINE(rname,line)
+    . i s="" s=" "
+    . w s,!
+    w ! ; end of routine
+    u io
+    c dev
     q
     ;
     ; Import all routines from the version control subdirectory
     ;
-importAll
+importAll n dir,dev,fname
     w "Importing routines from version control...",!
     s dir="c:\minimDat\"_$znspace_"\"
     ; get the list of files in the version control directory
@@ -56,8 +65,17 @@ importOne(dir,fname) n fullPath,list
     s list=""
     d import^%RI(fullPath,list)
     q
-    
+    ;
+    ; compare ^ROUTINE() code with code in version control subdirectory
+    ; using winMerge or other comparison program
+    ;
+compare n fname,cfProg
+    w "Program name: "
+    r fname
+    i fname="" q
+    s cfProg="start winMerge"
+    ; export ^ROUTINE() to temporary file
+    s tempf="c:\minimTemp\"_$j_"-"_fname
+    d export
  
-
-
 
