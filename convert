@@ -105,7 +105,7 @@ bin2dec(x) n i,x1,len
   ;   input strings of up to 57 characters only
   ;   this results in a maximum 76 character encoded output
   ;
-b64enc(data) n i,pad,padding,triplet,j,temp,outstr
+b64enc(data) n i,pad,padding,triplet,j,temp,outstr,ct,lookup
   i $l(data)>57 q ""
   ; code table
   s ct="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -128,10 +128,28 @@ b64enc(data) n i,pad,padding,triplet,j,temp,outstr
   s outstr=outstr_padding
   q outstr
   ;
+    ; test base64 encoding
+    ;
+testb64enc n str,encoded
+    w "Testing base 64 encoding "
+    s str="pleasure."
+    s encoded=$$b64enc(str)
+    i encoded="cGxlYXN1cmUu" w "."
+    e  w "E"
+    s str="leasure."
+    s encoded=$$b64enc(str)
+    i encoded="bGVhc3VyZS4=" w "."
+    e  w "E"
+    s str="easure."
+    s encoded=$$b64enc(str)
+    i encoded="ZWFzdXJlLg==" w "."
+    e  w "E"
+    q
+  ;
   ; base64 decoding
   ;  strings must not be >76 characters in length
   ;
-b64dec(data) n ct,outstr,ch,code,bin,i,j,triplet
+b64dec(data) n ct,outstr,ch,code,bin,i,j,triplet,tripLen
   i $l(data)>76 q ""
   i data="" q ""
   ; code table
@@ -150,9 +168,29 @@ b64dec(data) n ct,outstr,ch,code,bin,i,j,triplet
   .. s triplet=triplet_bin
   . ; convert triplet to 8 bit characters
   . ;w !,triplet,!
-  . f j=1:8:$l(triplet) d
+  . s tripLen=$l(triplet)\8*8
+  . f j=1:8:tripLen d
   .. ;w "in loop: ",$e(triplet,j,j+7),!
   .. s outstr=outstr_$c($$bin2dec($e(triplet,j,j+7)))
   q outstr
+    ;
+    ; test base 64 decoding
+    ;
+testb64dec n str,decoded
+    w "Testing base64 decoding "
+    s str="YWRtaW46MHh5Z2VuMTY="
+    s decoded=$$b64dec(str)
+    i decoded="admin:0xygen16" w "."
+    e  w "E"
+    s str="TWFuIGlzIGRpc3Rpbmd1aXNoZWQsIG5vdCBvbmx5IGJ5IGhpcyByZWFzb24sIGJ1dCBieSB0aGlz"
+    s decoded=$$b64dec(str)
+    i decoded="Man is distinguished, not only by his reason, but by this" w "."
+    e  w "E"
+    s str="ZWFzdXJlLg=="
+    s decoded=$$b64dec(str)
+    i decoded="easure." w "."
+    e  w "E"
+    w !
+    q
  
 

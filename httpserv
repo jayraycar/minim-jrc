@@ -31,7 +31,9 @@ httpserv ;  http web services
     ; put HTTP action in %action
     ; put HTTP request data into %data array
     ;
-    s $ZT="save^logErr"
+    ; 15 Jul 2017 - modified for node.js and MiniM
+    ;
+    s $et="g ^logErr"
     s %crlf=$c(13,10)
     s %s1=$e(^Sys("separators"),1)
     s %s2=$e(^Sys("separators"),2)
@@ -61,10 +63,10 @@ getReqL n quit,line,attr,first,seq
     . e  d
     . . s attr=$zlower($p(line,": "))
     . . s %headers(attr)=$$strip^libW($p(line,": ",2))
-    l +^httpLog
-    s seq=$o(^httpLog(""),-1)+1
-    s ^httpLog(seq)=%request_%s1_$h
-    l -^httpLog
+    ;l +^httpLog
+    ;s seq=$o(^httpLog(""),-1)+1
+    ;s ^httpLog(seq)=%request_%s1_$h
+    ;l -^httpLog
     q
     ;
     ; extract data from request
@@ -72,16 +74,11 @@ getReqL n quit,line,attr,first,seq
 extrData n object,i,value,cookie,next
     k %data
     s %method=$p(%request," "),%content=""
-    i %method="GET" d
-    . d GET
-    e  i %method="POST" d
-    . d POST
-    e  i %method="PUT" d
-    . d PUT
-    e  i %method="DELETE" d
-    . d DELETE
-    e  d  q
-    . d UNK
+    i %method="GET" d GET
+    e  i %method="POST" d POST
+    e  i %method="PUT" d POST
+    e  i %method="DELETE" d POST
+    e  d UNK q
     ;
     ; extract the data from %content
     i %request["?" d

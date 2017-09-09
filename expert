@@ -44,15 +44,15 @@ expert ;Expert system - ported from python verion
     ;   ^attr(ruleSet,attrName,"m")=mandatory[0|1]
     ;
     ; Session storage
-    ;   ^ssn(sid,"started")=date,time started
-    ;   ^ssn(sid,"facts",attr,value)=cert
-    ;   ^ssn(sid,"ruleSet")=ruleSet
-    ;   ^ssn(sid,"rulesFired")=""
-    ;   ^ssn(sid,"inputs",object)=value|certainty
-    ;   ^ssn(sid,"evalRule")=rule currently being evaluated
-    ;   ^ssn(sid,"ask")=[0|1] flag that a question needs to be asked
-    ;   ^ssn(sid,"stack",stack_ptr,"attr")=goal
-    ;   ^ssn(sid,"stack",stack_ptr,"rules")=^attr(ruleSet,goal,"inConc")
+    ;   ^esn(sid,"started")=date,time started
+    ;   ^esn(sid,"facts",attr,value)=cert
+    ;   ^esn(sid,"ruleSet")=ruleSet
+    ;   ^esn(sid,"rulesFired")=""
+    ;   ^esn(sid,"inputs",object)=value|certainty
+    ;   ^esn(sid,"evalRule")=rule currently being evaluated
+    ;   ^esn(sid,"ask")=[0|1] flag that a question needs to be asked
+    ;   ^esn(sid,"stack",stack_ptr,"attr")=goal
+    ;   ^esn(sid,"stack",stack_ptr,"rules")=^attr(ruleSet,goal,"inConc")
     ;
     ; Foundation case storage
     ;   ^fdncase(ruleSet,case,"inputs",object)=value|certainty
@@ -76,7 +76,7 @@ init s s1="|",s2="^"
     ;                    }
     ;    }
     ;
-ldFile(file) n line,cnt,rule,ok,raw,num,isList,attr,value,cert,type,tag
+ldJSON(file) n line,cnt,rule,ok,raw,num,isList,attr,value,cert,type,tag
     n op,seq,date
     d init
     ; load the file into memory
@@ -161,6 +161,90 @@ ldFile(file) n line,cnt,rule,ok,raw,num,isList,attr,value,cert,type,tag
     d buildIndex(json("ruleSet"))
     ;
     k json
+    q
+    ;
+    ; load rules from a text file with the following structure:
+    ;
+    ; ruleName: if
+    ;   attribute|comparator|value
+    ;   ...
+    ; then
+    ;   attribute|value_to_assign|certainty
+    ;   ...
+    ; else
+    ;   attribute|value_to_assign|certainty
+    ;
+    ; legalvals|attribute=value1,value2,...
+    ;
+    ; question|attribute=single line question
+    ;
+    ; Note:
+    ; comparator must be found in testPrem.
+    ; certainty must be null or an integer from 0 to 100
+    ;
+ldText(ruleSet) n line,fnm,inPrem,inConc,inElse,attr,valList,ptr
+    n val,comp,lnCnt
+    d init
+    s fnm="import/"_ruleSet_".rules"
+    w "Importing from ",fnm," ...",!
+    o fnm:(readonly):1
+    i '$t w "File ",fnm," does not exist!",! q
+    k ^rule(ruleSet)
+    k ^attr(ruleSet)
+    s (inPrem,inConc,inElse)=0
+    s ruleName=""
+    f  u fnm r line q:$zeof  d
+    . u $p
+    . s line=$$strip^libW(line)
+    . i inConc!inElse!inPrem,line="" d  q
+    . . s (inConc,inElse,inPrem)=0
+    . i line="" q  ;ignore blank lines
+    . i $e(line)="#" q  ;ignore comment lines
+    . i $f(line,": if") d
+    . . s ruleName=$p(line,":")
+    . . s inPrem=1
+    . . s (inConc,inElse)=0
+    . . s lnCnt=0
+    . i line="then" d
+    . . s inPrem=0
+    . . s inConc=1
+    . . s inElse=0
+    . . s lnCnt=0
+    . i line="else" d
+    . . s inPrem=0
+    . . s inConc=0
+    . . s inElse=1
+    . . s lnCnt=0
+    . ; store data
+    . i line["|" d
+    . . s lnCnt=lnCnt+1
+    . . s attr=$p(line,"|")
+    . . s comp=$p(line,"|",2)
+    . . s val=$p(line,"|",3)
+    . . i comp="in" d  ; this is a list, convert it
+    . . . s val=$tr(val,",[]",s2)
+    . . ; rule parts
+    . . i inPrem s ^rule(ruleSet,ruleName,0,lnCnt)=attr_s1_comp_s1_val q
+    . . i inConc s ^rule(ruleSet,ruleName,1,lnCnt)=attr_s1_comp_s1_val q
+    . . i inElse s ^rule(ruleSet,ruleName,2,lnCnt)=attr_s1_comp_s1_val q
+    . . ; attribute parts
+    . . i attr="legalvals" d  q
+    . . . s attr=$p($p(line,"|",2),"=")
+    . . . s valList=$p($p(line,"|",2),"=",2)
+    . . . f ptr=1:1 s val=$p(valList,",",ptr) q:val=""  d
+    . . . . s ^attr(ruleSet,attr,"legal",val)=""
+    . . . s ^attr(ruleSet,attr,"val")="legal_list()"
+    . . i attr="question" d  q
+    . . . s attr=$p($p(line,"|",2),"=")
+    . . . s ^attr(ruleSet,attr,"quest")=$p($p(line,"|",2),"=",2)
+    . . i attr="mandatory" d  q
+    . . . s attr=$p($p(line,"|",2),"=")
+    . . . s ^attr(ruleSet,attr,"m")=1
+    c fnm
+    u $p
+    w "Building indexes...",!
+    d buildIndex(ruleSet)
+    w !,"Done",!
     q
     ;
     ; initialise ^attr entries
@@ -270,31 +354,31 @@ initSession() n sid,quit
     s sid=$$short^uuid()
     s quit=0
     f  d  q:quit
-    . i $d(^ssn(sid)) s sid=$$short^uuid()
+    . i $d(^esn(sid)) s sid=$$short^uuid()
     . e  s quit=1
-    s ^ssn(sid,"started")=$h
+    s ^esn(sid,"started")=$h
     q sid
     ;
     ; End the session
     ; check if this is to be a foundation case.
     ; if it is then save inputs and the final list of facts and their
     ; values
-endSession(sid) i $d(^ssn(sid,"fdncase")) d
-    . s ruleSet=^ssn(sid,"ruleSet")
-    . s ^fdncase(ruleSet,^ssn(sid,"fdncase"),"goal")=^ssn(sid,"goal")
-    . m ^fdncase(ruleSet,^ssn(sid,"fdncase"),"inputs")=^ssn(sid,"inputs")
-    . m ^fdncase(ruleSet,^ssn(sid,"fdncase"),"facts")=^ssn(sid,"facts")
-    k ^ssn(sid)
+endSession(sid) i $d(^esn(sid,"fdncase")) d
+    . s ruleSet=^esn(sid,"ruleSet")
+    . s ^fdncase(ruleSet,^esn(sid,"fdncase"),"goal")=^esn(sid,"goal")
+    . m ^fdncase(ruleSet,^esn(sid,"fdncase"),"inputs")=^esn(sid,"inputs")
+    . m ^fdncase(ruleSet,^esn(sid,"fdncase"),"facts")=^esn(sid,"facts")
+    k ^esn(sid)
     q
     ;
 setGoal(sid,ruleSet,goal) i sid=""!(ruleSet="")!(goal="") q
-    s ^ssn(sid,"goal")=goal
-    s ^ssn(sid,"ruleSet")=ruleSet
-    s ^ssn(sid,"rulesFired")=""
-    s ^ssn(sid,"evalRule")=""
-    s ^ssn(sid,"ask")=0
-    s ^ssn(sid,"stack",1,"attr")=goal
-    s ^ssn(sid,"stack",1,"rules")=^attr(ruleSet,goal,"inConc")
+    s ^esn(sid,"goal")=goal
+    s ^esn(sid,"ruleSet")=ruleSet
+    s ^esn(sid,"rulesFired")=""
+    s ^esn(sid,"evalRule")=""
+    s ^esn(sid,"ask")=0
+    s ^esn(sid,"stack",1,"attr")=goal
+    s ^esn(sid,"stack",1,"rules")=^attr(ruleSet,goal,"inConc")
     q
     ;
     ;Pursue a fact for an attribute.
@@ -307,15 +391,15 @@ setGoal(sid,ruleSet,goal) i sid=""!(ruleSet="")!(goal="") q
 pursue(sid) n sp,quit,result,stop,attr,solved,rulePtr,curRule
     s quit=0
     f  d  q:quit
-    . s sp=$o(^ssn(sid,"stack",""),-1)
+    . s sp=$o(^esn(sid,"stack",""),-1)
     . i sp="" s quit=1 q  ; the stack has been exhausted
-    . s attr=^ssn(sid,"stack",sp,"attr")
+    . s attr=^esn(sid,"stack",sp,"attr")
     . ;"attr" is already contained in the facts dictionary
-    . ;i $d(^ssn(sid,"facts",attr)) k ^ssn(sid,"stack",sp) q
+    . ;i $d(^esn(sid,"facts",attr)) k ^esn(sid,"stack",sp) q
     . ;
     . ;no rules defined that might give a conclusion for "attr"
     . ;flag that user input is required, stop running the engine
-    . i ^ssn(sid,"stack",sp,"rules")="" s ^ssn(sid,"ask")=1,quit=1 q
+    . i ^esn(sid,"stack",sp,"rules")="" s ^esn(sid,"ask")=1,quit=1 q
     . ;there are rules that might lead to a conclusion,
     . ;work through them
     . s solved=0
@@ -323,12 +407,12 @@ pursue(sid) n sp,quit,result,stop,attr,solved,rulePtr,curRule
     . ;or the attr obtained a value
     . ;or a new attr has been added to the stack for pursuit
     . s stop=0
-    . f rulePtr=1:1  s curRule=$p(^ssn(sid,"stack",sp,"rules"),s1,rulePtr) q:curRule=""  d  q:stop
+    . f rulePtr=1:1  s curRule=$p(^esn(sid,"stack",sp,"rules"),s1,rulePtr) q:curRule=""  d  q:stop
     . . ;b:curRule="R01"
-    . . s ^ssn(sid,"evalRule")=curRule
+    . . s ^esn(sid,"evalRule")=curRule
     . . s result=$$evalRule(sid,curRule)
     . . ;save in rules fired list- only useful in debugging
-    . . ;s ^ssn(sid,"rulesFired")=^ssn(sid,"rulesFired")_curRule_s2_result_s1
+    . . ;s ^esn(sid,"rulesFired")=^esn(sid,"rulesFired")_curRule_s2_result_s1
     . . ;
     . . ;a value has been obtained, mark as solved but keep
     . . ;testing remaining rules in case they modify the value
@@ -337,17 +421,17 @@ pursue(sid) n sp,quit,result,stop,attr,solved,rulePtr,curRule
     . . ;set up variables for new pursuit
     . . ;break out of current loop
     . . i result=-1 d  q
-    . . . s sp=$o(^ssn(sid,"stack",""),-1)
-    . . . s attr=^ssn(sid,"stack",sp,"attr")
+    . . . s sp=$o(^esn(sid,"stack",""),-1)
+    . . . s attr=^esn(sid,"stack",sp,"attr")
     . . . s stop=1
     . . . s solved=0
     . ;
     . ; a solution was reached, pop the stack
-    . i solved k ^ssn(sid,"stack",sp)
+    . i solved k ^esn(sid,"stack",sp)
     . ;All the rules that might lead to an answer have been checked
     . ;and have failed.  End the consultation.
-    . i 'solved,$o(^ssn(sid,"stack",""),-1)=1,curRule="" d
-    . . k ^ssn(sid,"stack")
+    . i 'solved,$o(^esn(sid,"stack",""),-1)=1,curRule="" d
+    . . k ^esn(sid,"stack")
     . . s quit=1
     q
     ;
@@ -356,8 +440,8 @@ pursue(sid) n sp,quit,result,stop,attr,solved,rulePtr,curRule
     ;   type=2 for "else" conclusion
     ;
 conclude(sid,type,certainty) n ruleSet,rule,seq,attr,value,cert
-    s ruleSet=^ssn(sid,"ruleSet")
-    s rule=^ssn(sid,"evalRule")
+    s ruleSet=^esn(sid,"ruleSet")
+    s rule=^esn(sid,"evalRule")
     s seq=""
     f  s seq=$o(^rule(ruleSet,rule,type,seq)) q:seq=""  d
     . s attr=$p(^rule(ruleSet,rule,type,seq),s1)
@@ -367,9 +451,9 @@ conclude(sid,type,certainty) n ruleSet,rule,seq,attr,value,cert
     . i cert="" s cert=certainty
     . ; check if attribute is already in facts
     . ; if it is then do a fuzzy OR on the certainty value
-    . i $d(^ssn(sid,"facts",attr,value)) d
-    . . i cert>^ssn(sid,"facts",attr,value) s ^ssn(sid,"facts",attr,value)=cert
-    . e  s ^ssn(sid,"facts",attr,value)=cert
+    . i $d(^esn(sid,"facts",attr,value)) d
+    . . i cert>^esn(sid,"facts",attr,value) s ^esn(sid,"facts",attr,value)=cert
+    . e  s ^esn(sid,"facts",attr,value)=cert
     q
     ;
     ; evaluate a rule
@@ -381,7 +465,7 @@ conclude(sid,type,certainty) n ruleSet,rule,seq,attr,value,cert
 evalRule(sid,rule) n premTrue,notValued,prem,attr,sp,concluded,ruleSet
     n certainty
     s certainty=""
-    s ruleSet=^ssn(sid,"ruleSet")
+    s ruleSet=^esn(sid,"ruleSet")
     ;
     ;step through all attributes of the premise and test if entire
     ;premise is true or not
@@ -389,7 +473,7 @@ evalRule(sid,rule) n premTrue,notValued,prem,attr,sp,concluded,ruleSet
     s certVals=""
     f  s prem=$o(^rule(ruleSet,rule,0,prem)) q:prem=""  d
     . s attr=$p(^rule(ruleSet,rule,0,prem),s1)
-    . i '$d(^ssn(sid,"facts",attr)) d  q
+    . i '$d(^esn(sid,"facts",attr)) d  q
     . . s notValued=notValued_attr_s1
     . i '$$testPrem(sid,rule,prem,.certainty) s premTrue=0  ;if any parts fail whole premise fails
     ;
@@ -397,9 +481,9 @@ evalRule(sid,rule) n premTrue,notValued,prem,attr,sp,concluded,ruleSet
     ;attributes in the premise therefore need to pursue a new attr
     i premTrue,notValued'="" d  q -1
     . s attr=$p(notValued,s1)
-    . s sp=$o(^ssn(sid,"stack",""),-1)+1
-    . s ^ssn(sid,"stack",sp,"attr")=attr
-    . s ^ssn(sid,"stack",sp,"rules")=^attr(ruleSet,attr,"inConc")
+    . s sp=$o(^esn(sid,"stack",""),-1)+1
+    . s ^esn(sid,"stack",sp,"attr")=attr
+    . s ^esn(sid,"stack",sp,"rules")=$g(^attr(ruleSet,attr,"inConc"))
     ;
     ;all facts are true, put "then" conclusions into "facts" array
     i premTrue d
@@ -428,18 +512,18 @@ evalRule(sid,rule) n premTrue,notValued,prem,attr,sp,concluded,ruleSet
     ;
 testPrem(sid,rule,prem,certainty) n attr,op,value,ruleSet,match
     n i,fact,thisCert
-    s ruleSet=^ssn(sid,"ruleSet")
+    s ruleSet=^esn(sid,"ruleSet")
     s attr=$p(^rule(ruleSet,rule,0,prem),s1)
     s op=$p(^rule(ruleSet,rule,0,prem),s1,2)
     s value=$p(^rule(ruleSet,rule,0,prem),s1,3)
     ; if no fact value then return false
-    i '$d(^ssn(sid,"facts",attr)) q 0
+    i '$d(^esn(sid,"facts",attr)) q 0
     ;check facts associated with attr, there may be more than one
     ;if any fact satisfies the test then return true
     s match=0
     s fact=""
-    f  s fact=$o(^ssn(sid,"facts",attr,fact)) q:fact=""  d
-    . s thisCert=^ssn(sid,"facts",attr,fact)
+    f  s fact=$o(^esn(sid,"facts",attr,fact)) q:fact=""  d
+    . s thisCert=^esn(sid,"facts",attr,fact)
     . i op="=",fact=value s match=1
     . i op="not",fact=value s match=1,thisCert=100-thisCert
     . i op="in",(s2_value)[(s2_fact_s2) s match=1
@@ -457,20 +541,22 @@ testPrem(sid,rule,prem,certainty) n attr,op,value,ruleSet,match
     ; return a question for an attribute
     ;
 getQ(sid) n sp,qn,attr
-    s sp=$o(^ssn(sid,"stack",""),-1)
-    s attr=^ssn(sid,"stack",sp,"attr")
-    s qn=$g(^attr(^ssn(sid,"ruleSet"),attr,"quest"))
+    s sp=$o(^esn(sid,"stack",""),-1)
+    i sp="" q ""
+    s attr=^esn(sid,"stack",sp,"attr")
+    s qn=$g(^attr(^esn(sid,"ruleSet"),attr,"quest"))
     i qn="" s qn="What is the value for "_attr_"?"
-    s ^ssn(sid,"ask")=0  ;reset the ask flag
+    s ^esn(sid,"ask")=0  ;reset the ask flag
     q qn
     ;
     ; return the list of legal values, if there is one
     ;
 getLegal(sid) n sp,lv,value
-    s sp=$o(^ssn(sid,"stack",""),-1)
-    s attr=^ssn(sid,"stack",sp,"attr")
+    s sp=$o(^esn(sid,"stack",""),-1)
+    i sp="" q ""
+    s attr=^esn(sid,"stack",sp,"attr")
     s value="",lv=""
-    f  s value=$o(^attr(^ssn(sid,"ruleSet"),attr,"legal",value)) q:value=""  d
+    f  s value=$o(^attr(^esn(sid,"ruleSet"),attr,"legal",value)) q:value=""  d
     . i lv'="" s lv=lv_s1
     . s lv=lv_value
     q lv
@@ -481,12 +567,13 @@ getLegal(sid) n sp,lv,value
     ;
 validate(sid,ans) n ok,attr,sp,ll,v
     s ok=1
-    s sp=$o(^ssn(sid,"stack",""),-1)
-    s attr=^ssn(sid,"stack",sp,"attr")
-    s v=^attr(^ssn(sid,"ruleSet"),attr,"val")
+    s sp=$o(^esn(sid,"stack",""),-1)
+    i sp="" q 0
+    s attr=^esn(sid,"stack",sp,"attr")
+    s v=$g(^attr(^esn(sid,"ruleSet"),attr,"val"))
     i v="" s ok=1  ;default
     i v="default()" s ok=1  ;default
-    i v="legal_list()" s ok=$d(^attr(ruleSet,attr,"legal",ans))
+    i v="legal_list()" s ok=$d(^attr(^esn(sid,"ruleSet"),attr,"legal",ans))
     i v="date()" d
     . s ans=$$^chkDate(ans)
     . i ans="" s ok=0
@@ -494,27 +581,27 @@ validate(sid,ans) n ok,attr,sp,ll,v
     ;
     ; check if there is a flag to ask a question
     ;
-askQn(sid) q +$g(^ssn(sid,"ask"))
+askQn(sid) q +$g(^esn(sid,"ask"))
     ;
     ; put an entered answer into the "facts" array
     ;
 putAns(sid,ans,cert) n sp,attr
     i $g(cert)="" s cert=100
-    s sp=$o(^ssn(sid,"stack",""),-1)
-    s attr=^ssn(sid,"stack",sp,"attr")
-    s ^ssn(sid,"facts",attr,ans)=cert
-    s ^ssn(sid,"inputs",attr)=ans_s1_cert
-    k ^ssn(sid,"stack",sp)
-    s ^ssn(sid,"ask")=0
+    s sp=$o(^esn(sid,"stack",""),-1)
+    s attr=^esn(sid,"stack",sp,"attr")
+    s ^esn(sid,"facts",attr,ans)=cert
+    s ^esn(sid,"inputs",attr)=ans_s1_cert
+    k ^esn(sid,"stack",sp)
+    s ^esn(sid,"ask")=0
     q
     ;
     ; get the value of an attribute from the "facts" array
     ;
 getValue(sid,attr) n values,val
     s val="",values=""
-    f  s val=$o(^ssn(sid,"facts",attr,val)) q:val=""  d
+    f  s val=$o(^esn(sid,"facts",attr,val)) q:val=""  d
     . i values'="" s values=values_s1
-    . s values=values_val_s2_^ssn(sid,"facts",attr,val)
+    . s values=values_val_s2_^esn(sid,"facts",attr,val)
     q values
     ;
     ;-----------------
@@ -522,6 +609,7 @@ getValue(sid,attr) n values,val
     ;-----------------
     ;
     ; test the pursuit engine
+    ; using simple CHUI
     ;
 testEng n ok,ruleSet,id,lv,ans,goal,attr
     d init
@@ -585,14 +673,14 @@ testEng n ok,ruleSet,id,lv,ans,goal,attr
     d setGoal(id,ruleSet,goal)
     d run(id)
     w goal," = ",$$getValue(id,goal),!
-    d endSession(id)  ;kill the ^ssn entry
+    d endSession(id)  ;kill the ^esn entry
     q
     ;
     ; run the engine in CHUI mode
     ;
 run(sid) n ans,ok,lv
     ;keep going until the stack is empty
-    f  d  q:'$d(^ssn(sid,"stack"))
+    f  d  q:'$d(^esn(sid,"stack"))
     . d pursue(sid)
     . s ans=""
     . i $$askQn(sid) d
@@ -675,7 +763,7 @@ fdnCase w "Setup a foundation case",!,!
     i goal="" q
     s sid=$$initSession()
     d setGoal(sid,ruleSet,goal)
-    s ^ssn(sid,"fdncase")=case
+    s ^esn(sid,"fdncase")=case
     d run(sid)
     w goal," = ",$$getValue(sid,goal),!
     d endSession(sid)
@@ -691,12 +779,12 @@ testFdnCases(ruleSet) n case,goal,sid,ans,sp,attr,s1,s2,value,cert
     . s sid=$$initSession()
     . d setGoal(sid,ruleSet,goal)
     . ;operate the engine in a self answering mode
-    . f  d  q:'$d(^ssn(sid,"stack"))
+    . f  d  q:'$d(^esn(sid,"stack"))
     . . d pursue(sid)
     . . s ans=""
     . . i $$askQn(sid) d
-    . . . s sp=$o(^ssn(sid,"stack",""),-1)
-    . . . s attr=^ssn(sid,"stack",sp,"attr")
+    . . . s sp=$o(^esn(sid,"stack",""),-1)
+    . . . s attr=^esn(sid,"stack",sp,"attr")
     . . . s ans=$p(^fdncase(ruleSet,case,"inputs",attr),s1)
     . . . s cert=$p(^(attr),s1,2)
     . . . d putAns(sid,ans,cert)

@@ -123,6 +123,25 @@ escape(str) n i,outstr
     . e  s outstr=outstr_$e(str,i)
     q outstr
     ;
+    ; reverse escape of special characters
+    ;
+unescape(str) n fnd,pos
+  i str="" q
+  s fnd=1
+  f  d  q:'fnd
+  . s fnd=0
+  . s pos=$f(str,"&amp;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-6)_"&"_$e(str,pos,$l(str))
+  . s pos=$f(str,"&apos;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-7)_"'"_$e(str,pos,$l(str))
+  . s pos=$f(str,"&quot;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-7)_""""_$e(str,pos,$l(str))
+  . s pos=$f(str,"&lt;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-5)_"<"_$e(str,pos,$l(str))
+  . s pos=$f(str,"&gt;")
+  . i pos>0 s fnd=1,str=$e(str,1,pos-5)_">"_$e(str,pos,$l(str))
+  q str
+    ;
     ;********************************************
     ; widget creating routines that use ^httpout
     ;********************************************

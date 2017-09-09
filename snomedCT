@@ -154,11 +154,51 @@ find n id,d1
     r phrase
     w !
     i phrase="" q
-    s phrase=$$FUNC^%lcase(phrase)
+    s phrase=$zlcase(phrase)
     s id=""
     f  s id=$o(^concepts(id)) q:id=""  d
-    . s name=$$FUNC^%lcase($p(^(id),d1))
+    . s name=$zlcase($p(^(id),d1))
     . i $f(name,phrase) w id," ",name,!
     q
+    ;
+    ; html entry point for tree
+    ;
+htmlTree s d1="|"
+    s child=$g(%KEY("child",1,1))
+    i child="" d  q
+    . w child_" does not exist.",!
+    s name=$p($g(^concepts(child)),d1)
+    w "<h2>"_name_"</h2>",!
+    d htmlShow(child,1)
+    q
+    ;
+    ; show the tree
+    ;
+htmlShow(child,lvl) n parent,d1
+    s d1="|"
+    s parent=""
+    f  s parent=$o(^relIdx(child,parent)) q:parent=""  d
+    . s name=$p($g(^concepts(parent)),d1)
+    . w "<ul>",!
+    . w "<li>",name,"</li>",!
+    . d htmlShow(parent,lvl+1)
+    . w "</ul>",!
+    q
  
+    ;
+    ; html entry point for find
+htmlFind s d1="|"
+    s phrase=$g(%KEY("phrase",1,1))
+    i phrase="" w "Phrase must not be blank." q
+    w "<table>",!
+    s phrase=$zlcase(phrase)
+    s id=""
+    f  s id=$o(^concepts(id)) q:id=""  d
+    . s name=$zlcase($p(^concepts(id),d1))
+    . i $f(name,phrase) d
+    . . w "<tr><td>"
+    . . w "<a href=""snomedCTtree.mwa?child=",id,""">",id,"</a>"
+    . . w "</td><td>",name,"</td></tr>",!
+    w "</table>",!
+    q
 
