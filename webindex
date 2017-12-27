@@ -8,6 +8,6 @@ webindex ; default page to server if GET / request is received
     d addc^html("<h1>Experimental webservice</h1>")
     d addc^html("This page is displayed on receiving a GET / request.")
     d addc^html("</body></html>")
-    q
+    q 
     
 

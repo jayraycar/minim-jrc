@@ -9,7 +9,7 @@ vc  ; Interface to external version control
     ;
     ; TODO: delete routine, add new routine
     ;
-export
+exportAll
     w "Exporting routines for version control...",!
     s dir=^Sys("data_dir")_$znspace_"\"
     s rnm=""
@@ -18,14 +18,26 @@ export
     . d exportOne(dir,rnm)
     q
     ;
+    ; Export a specified routine to version control
+    ;
+expOne
+    w "Export a routine to version control",!,!
+    w "Routine name: "
+    r rname w !
+    i rname="" q
+    i '$d(^ROUTINE(rname)) w "Routine does not exist.",! q
+    s dir=^Sys("data_dir")_$znspace_"\"
+    d exportOne(dir,rname)
+    w "Done",!
+    q
+    ;
     ; export just one program
     ;
-exportOne(dir,rname,fname="") n expFnm,io,dev,line,s
+exportOne(dir,rname,fname="") n expFnm,dev,line,s
     i $e(dir,$l(dir))'="\" s dir=dir_"\"
     i fname="" s expFnm=dir_rname
     e  s expFnm=dir_fname
-    s io=$io
-    s dev="|FILE|"_expFnm o dev:("wtn"):1 e  u io d  q
+    s dev="|FILE|"_expFnm o dev:("wtn"):1 e  u $p d  q
     . w "Failed to use ",expFnm,!
     u dev
     w " ; ~Format=ANSI.S~",!
@@ -38,36 +50,60 @@ exportOne(dir,rname,fname="") n expFnm,io,dev,line,s
     . i s="" s s=" "
     . w s,!
     w ! ; end of routine
-    u io
+    u $p
     c dev
     q
     ;
     ; Import all routines from the version control subdirectory
     ;
-importAll n dir,dev,fname
+importAll n dir,dirDev,fname
     w "Importing routines from version control...",!
     s dir=^Sys("data_dir")_$znspace_"\"
     ; get the list of files in the version control directory
-    s dev="|PIPE|dir /b "_dir
-    o dev:("rt")
-    n $et="g endDir"
-    u dev
-    f  r fname d
+    s dirDev="|PIPE|dir /b "_dir
+    o dirDev:("rt")
+    s $et="g endDir"
+    f  u dirDev r fname  d
+    . i fname="vc" q ;skip this program as it is already imported
     . d importOne(dir,fname)
 endDir
     s $et=""
-    c dev
     u $p
+    c dirDev
     q
     ;
     ; import a routine from version control
     ;
-importOne(dir,fname) n fullPath,list
+importOne(dir,fname) n fullPath,list,n
     i $e(dir,$l(dir))'="\" s dir=dir_"\"
     s fullPath=dir_fname
     s list=""
-    d import^%RI(fullPath,list)
+    s n=$$import(fullPath,list,1,1)
     q
+    ;
+    ; do the import of file (Modified from %RI)
+    ;
+import(fname,list,compile=1,show=0)
+    n dev="|FILE|"_fname,io=$io,line,n,size,rname,cnt=0,tmp
+    o dev:("rte"):1 e  q 0
+    n $et="g endImport"
+    u dev
+    r line,line
+    f  r rname q:rname=""  d  q:line=""
+    . i show u $p w "Load ",rname,"... " u dev
+    . k ^rOBJ(rname),^$R(rname)
+    . s n=0,size=0
+    . f  r line q:line=""  s ^ROUTINE(rname,$i(n))=line,size=size+$l(line)
+    . s ^ROUTINE(rname)=n_","_size
+    . s ^ROUTINE(rname,0)=$h
+    . i compile d
+    . . u $p w:show "compile ",rname,"... " s tmp=$v("rou","c",rname)
+    . . w:(tmp=0&show) "success",!
+    . . u dev
+    . s list(rname)="",cnt=cnt+1
+endImport
+    u $p c dev
+    q cnt
     ;
     ; compare ^ROUTINE() code with code in version control subdirectory
     ; using winMerge or other comparison program
