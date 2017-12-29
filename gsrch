@@ -172,5 +172,4 @@ search n quit,sub,subs,inRange,ans,checkFin,key,lnCnt
     . . w !
     . s key=nextKey
     q
- 
 

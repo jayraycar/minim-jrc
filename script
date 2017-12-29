@@ -83,12 +83,17 @@ bom n fnm,quit,line,book,ch,vs,wrapped
     ; load the Bible into the database
     ;
 bibleV1 n fnm,line,book,ch,vs,inVs,chvs,lnCnt,oldVs,oldCh
-    s fnm="/home/james/Documents/scriptures/texts/scr-bible-kjv.txt"
-    o fnm:(readonly)
+    i $ZV["Windows" d
+    . s fnm="|FILE|c:\users\james.carthew\Documents\ebooks\bible-kjv.txt"
+    e  d
+    . s fnm="|FILE|/home/james/Documents/scriptures/texts/scr-bible-kjv.txt"
+    w "Loading from ",fnm,!
+    o fnm:("rt")
     s quit=0,inVs=0,lnCnt=0,oldCh=0,oldVs=0
     f  u fnm r line q:$zeof  d  q:quit
     . u $p
     . s line=$tr(line,$c(13),"")
+    . .
     . ; blank lines indicate the end of a verse
     . i line="" s inVs=0 q
     . s chvs=$p(line," ")

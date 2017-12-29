@@ -1,17 +1,20 @@
  ; ~Format=ANSI.S~
 %RO Version Control
 test
-test ; misc testing code
-    n zeof=$v("proc",5,0)
-    n dev="|PIPE|c:\minimDat\sha256sum"
-    n resp
-    o dev:("rwt")
-    u dev
-    w "0xygen16",!
-    f  q:$zeof  d
-    . r resp
-    u $p w resp,!
-    c dev
-    i $v("proc",5,zeof)
+test ; test input from node.js child spawn.
+    u $p
+    k ^jrc
+    s ^jrc(0)="^test started"
+    s quit=0
+    s buf=""
+    s cnt=0
+    f  d  q:quit
+    . r data:5
+    . s cnt=cnt+1
+    . s ^jrc(cnt)=data
+    . s buf=buf_data_$c(13,10)
+    . i data="" s quit=1
+    w buf,!," - is what I received",!
     q
+    
 

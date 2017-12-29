@@ -3,9 +3,14 @@
 temp
 temp ;miscellaneous dribble
     ;
-    s w="",new=0
-    f  s w=$o(^word(w)) q:w=""  d
-    . i '$d(^xref(w)) s new=new+1
-    w new," words not in ^xref",!
+    s dev="|FILE|c:\minimDat\jrc\temp"
+    o dev:("rt")
+    n $et="g eof"
+    u dev
+    f  r line
+eof
+    c dev
+    u $p
+    s $ze=""
     q
 

@@ -3,7 +3,7 @@
 thesQry
 thesQry ;Query the Moby thesaurus entries
     ; James Carthew 5 Sep 2010
-    ;
+    ; 
     s quit=0
     f  d  q:quit
     . w "Lookup? "
@@ -22,5 +22,4 @@ thesQry ;Query the Moby thesaurus entries
     . . . e  w "    ",alt,!
     . . w !
     q
- 
 
