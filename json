@@ -341,7 +341,7 @@ addMember(%json,name,value,type) n curSub,nextSub
     . i %UCASE(value)="TRUE"!(value=1) s @%json@(nextSub)="true"
     . i %UCASE(value)="FALSE"!(value=0) s @%json@(nextSub)="false"
     i type="null" s @%json@(nextSub)="null"
-    i type="string" s @%json@(nextSub)=""""_value_""""
+    i type="string" s @%json@(nextSub)=""""_$$escape(value)_""""
     i type="number" s @%json@(nextSub)=value
     i type="object" d stObj("json")
     i type="list" d stList("json")
@@ -355,8 +355,9 @@ addMember(%json,name,value,type) n curSub,nextSub
     ;   number
     ;   string
     ;   number
+    ;   object
     ;
-addToList(%json,element,type) n curSub,nextSub
+addToList(%json,element,type) n curSub,nextSub,i
     s curSub=$o(@%json@(""),-1)
     i curSub="" d errMsg("Invalid start of document","","",%json) q ; must have a previous subscript
     s nextSub=curSub+1
@@ -367,9 +368,26 @@ addToList(%json,element,type) n curSub,nextSub
     . i $$FUNC^%UCASE(element)="TRUE"!(element=1) s @%json@(nextSub)="true"
     . i $$FUNC^%UCASE(element)="FALSE"!(element=0) s @%json@(nextSub)="false"
     i type="null" s @%json@(nextSub)="null"
-    i type="string" s @%json@(nextSub)=""""_element_""""
+    i type="string" s @%json@(nextSub)=""""_$$escape(element)_""""
     i type="number" s @%json@(nextSub)=element
+    i type="object" d
+    . s i=""
+    . f  s i=$o(@element@(i)) q:i=""  d
+    . . s @%json@(nextSub)=@element@(i)
+    . . s nextSub=nextSub+1
     q
+    ;
+    ; escape special characters
+    ;
+escape(str) n i,outstr
+    s outstr=""
+    f i=1:1:$l(str) d
+    . i $e(str,i)="""" s outstr=outstr_"\"""
+    . e  i $e(str,i)="\" s outstr=outstr_"\\"
+    . e  i $a($e(str,i))>126 s outstr=outstr_"%"_$zconvert($e(str,i),"O","SHEX")
+    . e  i $a($e(str,i))<32 s outstr=outstr_"%"_$zconvert($e(str,i),"O","SHEX")
+    . e  s outstr=outstr_$e(str,i)
+    q outstr
     ;
     ; test encoding of data
     ;

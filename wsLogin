@@ -1,0 +1,7 @@
+ ; ~Format=ANSI.S~
+%RO Version Control
+wsLogin
+wsLogin ; Dummy program to enable login to work
+    q
+    
+

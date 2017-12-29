@@ -255,5 +255,75 @@ mwaShowError ;i '$$session^httpd() q
     w "<hr />",!
     ;
     q
+    ;
+    ;******* Web services routines - JSON output ******
+    ;
+    ;
+    ; List of dates on which errors have occurred.
+    ;
+wsDates
+    d addh^html("Content-Type","application/json")
+    d stList^json("output")
+    s day=""
+    f  s day=$o(^errLog(day),-1) q:day=""  d
+    . s date=$ZD(day,2)
+    . d addToList^json("output",date,"string")
+    d endList^json("output")
+    m ^httpout($j,"C")=output
+    q
+    ;
+    ; List the errors that occurred on a specified day
+    ;
+wsList
+    d addh^html("Content-Type","application/json")
+    s day=$ZDH(%actionId,2)
+    d stList^json("output")
+    s entry=""
+    f  s entry=$o(^errLog(day,entry),-1) q:entry=""  d
+    . k obj
+    . d stObj^json("obj")
+    . d addMember^json("obj","errnum",entry,"number")
+    . s time=$p(^errLog(day,entry,"$horolog"),",",2)
+    . s time=$ZT(time,1)
+    . d addMember^json("obj","time",time,"string")
+    . s errText=^errLog(day,entry,"$zerror")
+    . d addMember^json("obj","error",errText,"string")
+    . d endObj^json("obj")
+    . d addToList^json("output","obj","object")
+    d endList^json("output")
+    m ^httpout($j,"C")=output
+    q
+    ;
+    ; Return the details of an ^errLog entry
+    ;
+wsDetail
+    d addh^html("Content-Type","application/json")
+    s day=$ZDH(%actionId,2)
+    s errnum=$g(%data("errnum"),1)
+    d stList^json("output")
+    s sub=""
+    f  s sub=$o(^errLog(day,errnum,sub)) q:sub=""  d
+    . i sub="$stack" d
+    . . s i=""
+    . . f  s i=$o(^errLog(day,errnum,sub,i)) q:i=""  d
+    . . . s line="$stack("_i_"): "_^errLog(day,errnum,sub,i)
+    . . . d addToList^json("output",line,"string")
+    . e  i sub="^$device" d
+    . . s i=""
+    . . f  s i=$o(^errLog(day,errnum,sub,i)) q:i=""  d
+    . . . s line=sub_"("_i_")="_^errLog(day,errnum,sub,i)
+    . . . d addToList^json("output",line,"string")
+    . e  i sub="vars" d
+    . . d addToList^json("output","Variables...","string")
+    . . s i=""
+    . . f  s i=$o(^errLog(day,errnum,sub,i)) q:i=""  d
+    . . . s line="    "_^errLog(day,errnum,sub,i)
+    . . . d addToList^json("output",line,"string")
+    . e  d
+    . . s line=sub_": "_^errLog(day,errnum,sub)
+    . . d addToList^json("output",line,"string")
+    d endList^json("output")
+    m ^httpout($j,"C")=output
+    q
  
 
